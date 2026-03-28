@@ -3,6 +3,24 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { OrderItemInput } from "@/lib/types";
 
+function toLegacyAddonColumns(item: OrderItemInput) {
+  const normalizedNames = item.ingredientChoices.map((choice) => ({
+    ...choice,
+    normalizedName: choice.name.trim().toLowerCase()
+  }));
+
+  const bobaChoice = normalizedNames.find((choice) => choice.normalizedName.includes("boba"));
+  const mangoChoice = normalizedNames.find((choice) => choice.normalizedName.includes("mango"));
+  const aloeChoice = normalizedNames.find((choice) => choice.normalizedName.includes("aloe"));
+
+  return {
+    // Existing DB constraint expects boba to be 1, 2, or 3 rather than 0/1.
+    boba: !bobaChoice ? 1 : bobaChoice.quantity > 1 ? 3 : 2,
+    mangoJelly: mangoChoice ? 1 : 0,
+    aloeJelly: aloeChoice ? 1 : 0
+  };
+}
+
 function computeItemTotal(baseCost: number, item: OrderItemInput) {
   const ingredientCost = item.ingredientChoices.reduce(
     (sum, ingredient) => sum + ingredient.addCost * ingredient.quantity,
@@ -36,6 +54,7 @@ export async function completeCurrentOrder(employeeId: number, items: OrderItemI
       }
 
       const lineCost = computeItemTotal(menuItem.cost.toNumber(), item);
+      const legacyAddons = toLegacyAddonColumns(item);
       total += lineCost;
 
       await tx.orderitem.create({
@@ -45,9 +64,9 @@ export async function completeCurrentOrder(employeeId: number, items: OrderItemI
           quantity: item.quantity,
           sweetness: item.sweetness,
           ice: item.ice,
-          boba: 0,
-          mango_jelly: 0,
-          aloe_jelly: 0,
+          boba: legacyAddons.boba,
+          mango_jelly: legacyAddons.mangoJelly,
+          aloe_jelly: legacyAddons.aloeJelly,
           cost: new Prisma.Decimal(lineCost)
         }
       });
