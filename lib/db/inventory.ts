@@ -47,7 +47,7 @@ export async function getRestockOrders(): Promise<RestockOrder[]> {
   });
 
   return orders.map((order) => ({
-    id: order.id,
+    id: Number(order.id), // <--- Wrap in Number()
     orderedAt: order.ordered_at.toISOString(),
     status: order.status as "pending" | "confirmed",
     items: order.inventoryorder_ingredient.map((line) => ({
@@ -71,7 +71,7 @@ export async function getRestockOrderById(id: number): Promise<RestockOrder | nu
   if (!order) return null;
 
   return {
-    id: order.id,
+    id: Number(order.id), // <--- Wrap in Number()
     orderedAt: order.ordered_at.toISOString(),
     status: order.status as "pending" | "confirmed",
     items: order.inventoryorder_ingredient.map((line) => ({
@@ -182,7 +182,7 @@ export async function submitRestockOrder(quantities: Record<number, number>): Pr
 export async function confirmRestockOrder(id: number): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.inventoryorder.update({
-      where: { id },
+      where: { id: BigInt(id) }, // Cast to BigInt for the lookup
       data: { status: "confirmed" },
     });
 
