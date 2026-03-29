@@ -20,9 +20,12 @@ export function InventoryClient({ orders, criticalIngredients }: Props) {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Previous Orders</h2>
-          <Button asChild size="sm">
-            <Link href="/manager/inventory/create">+ New Order</Link>
-          </Button>
+          {/* FIX: Wrapped Button in Link and removed asChild */}
+          <Link href="/manager/inventory/create">
+            <Button size="sm">
+              + New Order
+            </Button>
+          </Link>
         </div>
 
         {orders.length === 0 ? (
@@ -54,9 +57,12 @@ export function InventoryClient({ orders, criticalIngredients }: Props) {
                     >
                       {order.status}
                     </Badge>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/manager/inventory/${order.id}`}>View Details</Link>
-                    </Button>
+                    {/* FIX: Wrapped Button in Link and removed asChild */}
+                    <Link href={`/manager/inventory/${order.id}`}>
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>

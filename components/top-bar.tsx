@@ -24,13 +24,8 @@ export function TopBar({ title, employeeLabel, links = [] }: TopBarProps) {
   const clear = useOrderStore((state) => state.clear);
 
   async function logout() {
-    // 1. Hit your auth endpoint to clear the session cookie
     await fetch("/api/auth/logout", { method: "POST" });
-    
-    // 2. Clear any lingering order state from Zustand
     clear();
-    
-    // 3. Redirect the user back to the login page
     router.replace("/login");
     router.refresh();
   }
@@ -44,9 +39,11 @@ export function TopBar({ title, employeeLabel, links = [] }: TopBarProps) {
         </div>
         <div className="flex flex-1 flex-wrap items-center gap-2">
           {links.map((link) => (
-            <Button key={link.href} asChild variant="outline" size="sm" className="min-w-fit">
-              <Link href={link.href}>{link.label}</Link>
-            </Button>
+            <Link key={link.href} href={link.href}>
+              <Button variant="outline" size="sm" className="min-w-fit">
+                {link.label}
+              </Button>
+            </Link>
           ))}
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
