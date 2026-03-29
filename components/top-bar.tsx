@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import type { Route } from "next";
+import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useOrderStore } from "@/lib/stores/order-store";
 
 type TopBarLink = {
   href: Route;
@@ -15,6 +20,21 @@ type TopBarProps = {
 };
 
 export function TopBar({ title, employeeLabel, links = [] }: TopBarProps) {
+  const router = useRouter();
+  const clear = useOrderStore((state) => state.clear);
+
+  async function logout() {
+    // 1. Hit your auth endpoint to clear the session cookie
+    await fetch("/api/auth/logout", { method: "POST" });
+    
+    // 2. Clear any lingering order state from Zustand
+    clear();
+    
+    // 3. Redirect the user back to the login page
+    router.replace("/login");
+    router.refresh();
+  }
+
   return (
     <header className="shell-frame pb-0">
       <div className="shell-header">
@@ -33,7 +53,10 @@ export function TopBar({ title, employeeLabel, links = [] }: TopBarProps) {
           <div className="rounded-2xl border border-border bg-[rgb(var(--surface-alt))] px-4 py-2 text-sm text-stone-600">
             {employeeLabel}
           </div>
-          <LogoutButton />
+          <Button variant="outline" onClick={logout} className="gap-2">
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
       </div>
     </header>
