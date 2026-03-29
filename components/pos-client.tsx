@@ -159,8 +159,8 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
           </div>
 
           {employee.isManager && (
-              <Link href="/manager">
-                <Button variant="outline">Manager Dashboard</Button>
+              <Link href="/manager/inventory">
+                <Button variant="outline">Inventory Management</Button>
               </Link>
             )}
           
