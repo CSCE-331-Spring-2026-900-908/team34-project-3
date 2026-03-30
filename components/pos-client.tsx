@@ -17,6 +17,7 @@ type PosClientProps = {
   ingredients: IngredientRecord[];
 };
 
+// The options for how sweet the drink can be
 const sweetnessOptions = [0, 25, 50, 75, 100] as const;
 const iceOptions = [
   { label: "No Ice", value: 0 },
@@ -27,7 +28,8 @@ const iceOptions = [
 
 type SelectedIngredientState = Record<number, number>;
 
-function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: SelectedIngredientState, ingredients: IngredientRecord[]) {
+function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: SelectedIngredientState, ingredients: IngredientRecord[])
+{
   const addOnTotal = ingredients.reduce((sum, ingredient) => {
     const ingredientQuantity = selectedIngredients[ingredient.id] ?? 0;
     return sum + ingredient.addCost * ingredientQuantity;
@@ -36,7 +38,8 @@ function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: 
   return (item.cost + addOnTotal) * quantity;
 }
 
-export function PosClient({ employee, menuItems, ingredients }: PosClientProps) {
+export function PosClient({ employee, menuItems, ingredients }: PosClientProps)
+{
   const router = useRouter();
   const items = useOrderStore((state) => state.items);
   const addItem = useOrderStore((state) => state.addItem);
@@ -61,9 +64,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
 
   const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
 
-  function closeModal() {
-    setSelectedItem(null);
-  }
+  function closeModal() { setSelectedItem(null); }
 
   function updateIngredient(id: number, delta: number) {
     setSelectedIngredients((current) => {
