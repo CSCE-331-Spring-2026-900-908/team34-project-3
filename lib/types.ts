@@ -16,7 +16,9 @@ export type MenuItemRecord = {
 export type IngredientRecord = {
   id: number;
   name: string;
+  servingsAvailable: number;
   addCost: number;
+  recommendedRestockQty: number;
 };
 
 export type IngredientChoice = {
@@ -34,4 +36,26 @@ export type OrderItemInput = {
   ice: number;
   ingredientChoices: IngredientChoice[];
   cost: number;
+};
+
+
+export type EmployeeRecord = {
+  employeeId: number;
+  firstName: string;
+  lastName: string;
+  isManager: boolean;
+};
+
+export type RestockOrderItemRecord = {
+  ingredientId: number;
+  ingredientName: string;
+  quantity: number;
+  unitCost: number;
+};
+
+export type RestockOrderRecord = {
+  id: number;
+  orderedAt: string;
+  status: string;
+  items: RestockOrderItemRecord[];
 };

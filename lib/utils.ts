@@ -24,3 +24,7 @@ export function formatCurrency(value: number) {
     currency: "USD"
   }).format(value);
 }
+
+export function bigintToNumber(value: bigint | number) {
+  return typeof value === "bigint" ? Number(value) : value;
+}

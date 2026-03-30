@@ -1,4 +1,8 @@
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
+import type { IngredientRecord, RestockOrderRecord } from "@/lib/types";
+import { bigintToNumber, decimalToNumber } from "@/lib/utils";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 // Import these in client components instead of redefining them inline.
@@ -201,4 +205,54 @@ export async function confirmRestockOrder(id: number): Promise<void> {
       });
     }
   });
+}
+
+export async function confirmOrder(orderId: number) {
+  await prisma.$transaction(async (tx) => {
+    await tx.inventoryorder.update({
+      where: {
+        id: BigInt(orderId)
+      },
+      data: {
+        status: "confirmed"
+      }
+    });
+
+    const items = await tx.inventoryorder_ingredient.findMany({
+      where: {
+        order_id: BigInt(orderId)
+      }
+    });
+
+    for (const item of items) {
+      await tx.ingredient.update({
+        where: {
+          id: item.ingredient_id
+        },
+        data: {
+          servings_available: {
+            increment: new Prisma.Decimal(item.quantity)
+          }
+        }
+      });
+    }
+  });
+}
+
+export async function addIngredient(name: string, addCost: number) {
+  const ingredient = await prisma.ingredient.create({
+    data: {
+      name,
+      servings_available: new Prisma.Decimal(0),
+      add_cost: new Prisma.Decimal(addCost)
+    }
+  });
+
+  return {
+    id: ingredient.id,
+    name: ingredient.name,
+    servingsAvailable: decimalToNumber(ingredient.servings_available),
+    addCost: decimalToNumber(ingredient.add_cost),
+    recommendedRestockQty: 0
+  } satisfies IngredientRecord;
 }

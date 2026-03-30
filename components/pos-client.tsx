@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { IngredientRecord, MenuItemRecord, SessionEmployee } from "@/lib/types";
 import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
+import Chatbot from "@/components/chatbot";
 
 type PosClientProps = {
   employee: SessionEmployee;
@@ -249,6 +250,9 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
               </Button>
             </CardContent>
           </Card>
+          {/* Chatbot under checkout */}
+          <Chatbot />
+
         </div>
       </div>
 
