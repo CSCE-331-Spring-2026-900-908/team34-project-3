@@ -16,3 +16,7 @@ export async function requireEmployeePage() {
 export function unauthorizedJson(message = "Unauthorized") {
   return NextResponse.json({ error: message }, { status: 401 });
 }
+
+export function forbiddenJson(message = "Forbidden") {
+  return NextResponse.json({ error: message }, { status: 403 });
+}

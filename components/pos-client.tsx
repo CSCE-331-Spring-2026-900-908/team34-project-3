@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { IngredientRecord, MenuItemRecord, SessionEmployee } from "@/lib/types";
 import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
+import Chatbot from "@/components/chatbot";
 
 type PosClientProps = {
   employee: SessionEmployee;
@@ -162,6 +163,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps)
             <h1 className="text-2xl font-semibold tracking-tight">{employee.fullName}</h1>
             <p className="text-sm text-stone-500">Manage orders and checkout.</p>
           </div>
+
           <Button variant="outline" onClick={logout} className="gap-2">
             <LogOut className="h-4 w-4" />
             Logout
@@ -254,6 +256,9 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps)
               </Button>
             </CardContent>
           </Card>
+          {/* Chatbot under checkout */}
+          <Chatbot />
+
         </div>
       </div>
 
