@@ -10,7 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginSchema } from "@/lib/validation";
 
-export function LoginForm() {
+type LoginFormProps = {
+  nextPath: string;
+};
+
+export function LoginForm({ nextPath }: LoginFormProps) {
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
@@ -48,7 +52,7 @@ export function LoginForm() {
       return;
     }
 
-    router.replace("/pos");
+    router.replace(nextPath);
     router.refresh();
   }
 

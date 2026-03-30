@@ -21,10 +21,7 @@ export default async function InventoryPage() {
       <TopBar
         title="Orders & Inventory"
         employeeLabel={`${employee.fullName} (Manager)`}
-        links={[
-          { href: "/pos" as Route, label: "Cashier" },
-          { href: "/manager" as Route, label: "Manager Dashboard" },
-        ]}
+        links={[{ href: "/manager" as Route, label: "Manager Dashboard" }]}
       />
       <main className="shell-frame">
         <InventoryClient orders={orders} criticalIngredients={criticalIngredients} />
