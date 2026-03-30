@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+// The page for the seasonal items
 const featuredItems = ["UNDER CONSTRUCTION...", "UNDER CONSTRUCTION...", "UNDER CONSTRUCTION...", "UNDER CONSTRUCTION..."];
 
 export default function MenuBoardPage() {

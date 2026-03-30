@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 
-export default function Chatbot() {
+// The critical chatbot functionality using AI API to provide maximum user support
+export default function Chatbot()
+{
   const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([]);
   const [input, setInput] = useState("");
 
