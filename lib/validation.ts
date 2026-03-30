@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+
+const ingredientCost = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => !Number.isNaN(Number(value)), "Enter a valid cost.")
+  .refine((value) => Number(value) >= 0, "Cost cannot be negative.");
+  
 export const loginSchema = z.object({
   employeeId: z
     .string()
@@ -37,3 +45,9 @@ export const employeeFormSchema = z.object({
 });
 
 export const employeeMutationSchema = employeeFormSchema;
+
+export const ingredientFormSchema = z.object({
+  name: z.string().trim().min(1, "Name cannot be empty."),
+  rawCost: ingredientCost,
+  rawStartingQuantity: z.string().optional().default("")
+});
