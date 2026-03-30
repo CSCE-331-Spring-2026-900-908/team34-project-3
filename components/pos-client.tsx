@@ -3,7 +3,6 @@
 import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -158,12 +157,6 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
             <p className="text-sm text-stone-500">Manage orders and checkout.</p>
           </div>
 
-          {employee.isManager && (
-              <Link href="/manager/inventory">
-                <Button variant="outline">Inventory Management</Button>
-              </Link>
-            )}
-          
           <Button variant="outline" onClick={logout} className="gap-2">
             <LogOut className="h-4 w-4" />
             Logout
