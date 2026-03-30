@@ -66,11 +66,13 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps)
 
   function closeModal() { setSelectedItem(null); }
 
-  function updateIngredient(id: number, delta: number) {
+  function updateIngredient(id: number, delta: number)
+  {
     setSelectedIngredients((current) => {
       const next = Math.max(0, (current[id] ?? 0) + delta);
 
-      if (next === 0) {
+      if (next === 0) 
+      {
         const { [id]: _removed, ...rest } = current;
         return rest;
       }
@@ -83,7 +85,9 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps)
   }
 
   function addSelectedItem() {
-    if (!selectedItem) {
+    // If there is no selected item, do not attempt to continue
+    if (!selectedItem) 
+    {
       return;
     }
 
@@ -111,6 +115,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps)
   }
 
   async function handleCheckout() {
+    // If there are no items, return an error
     if (items.length === 0) {
       toast.error("Add at least one item before checkout.");
       return;
