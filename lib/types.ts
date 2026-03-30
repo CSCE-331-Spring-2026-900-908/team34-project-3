@@ -35,3 +35,11 @@ export type OrderItemInput = {
   ingredientChoices: IngredientChoice[];
   cost: number;
 };
+
+
+export type EmployeeRecord = {
+  employeeId: number;
+  firstName: string;
+  lastName: string;
+  isManager: boolean;
+};

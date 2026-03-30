@@ -29,3 +29,11 @@ export const orderItemInputSchema = z.object({
 export const completeOrderSchema = z.object({
   items: z.array(orderItemInputSchema).min(1, "Add at least one item.")
 });
+
+export const employeeFormSchema = z.object({
+  firstName: z.string().trim().min(1, "First name cannot be empty."),
+  lastName: z.string().trim().min(1, "Last name cannot be empty."),
+  isManager: z.boolean()
+});
+
+export const employeeMutationSchema = employeeFormSchema;
