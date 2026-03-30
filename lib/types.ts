@@ -13,13 +13,19 @@ export type MenuItemRecord = {
   ingredients: Record<number, number>;
 };
 
-export type IngredientRecord = {
+export type IngredientRestockRecord = {
   id: number;
   name: string;
   servingsAvailable: number;
   addCost: number;
   recommendedRestockQty: number;
 };
+
+export type IngredientRecord = {
+  id: number;
+  name: string;
+  addCost: number;
+}
 
 export type IngredientChoice = {
   ingredientId: number;

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import type { IngredientRecord, RestockOrderRecord } from "@/lib/types";
+import type { IngredientRestockRecord, RestockOrderRecord } from "@/lib/types";
 import { bigintToNumber, decimalToNumber } from "@/lib/utils";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
@@ -254,5 +254,5 @@ export async function addIngredient(name: string, addCost: number) {
     servingsAvailable: decimalToNumber(ingredient.servings_available),
     addCost: decimalToNumber(ingredient.add_cost),
     recommendedRestockQty: 0
-  } satisfies IngredientRecord;
+  } satisfies IngredientRestockRecord;
 }
