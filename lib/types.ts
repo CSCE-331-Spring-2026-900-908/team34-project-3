@@ -6,6 +6,15 @@ export type SessionEmployee = {
   isManager: boolean;
 };
 
+export type SessionCustomer = {
+  googleId: string;
+  email: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  picture?: string;
+};
+
 export type MenuItemRecord = {
   id: number;
   name: string;
