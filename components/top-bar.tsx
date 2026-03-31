@@ -8,18 +8,19 @@ import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOrderStore } from "@/lib/stores/order-store";
 
-type TopBarLink = {
-  href: Route;
-  label: string;
-};
-
 type TopBarProps = {
   title: string;
   employeeLabel: string;
   links?: TopBarLink[];
 };
 
-export function TopBar({ title, employeeLabel, links = [] }: TopBarProps) {
+type TopBarLink = {
+  href: Route;
+  label: string;
+};
+
+export function TopBar({ title, employeeLabel, links = [] }: TopBarProps)
+{
   const router = useRouter();
   const clear = useOrderStore((state) => state.clear);
 
