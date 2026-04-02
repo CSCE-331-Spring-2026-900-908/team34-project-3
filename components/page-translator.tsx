@@ -18,15 +18,20 @@ type TranslatableNode = {
   originalText: string;
 };
 
+type TranslationMode = "full" | "augment";
+type TranslateElementDetail = {
+  element?: HTMLElement | null;
+};
+
 const EXCLUDED_TAG_NAMES = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "SELECT", "OPTION"]);
 
 function normalizeText(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function collectTranslatableNodes() {
+function collectTranslatableNodes(root: Node = document.body) {
   const nodes: TranslatableNode[] = [];
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parentElement = node.parentElement;
       const text = normalizeText(node.textContent ?? "");
@@ -90,6 +95,8 @@ export function PageTranslator() {
   const previousInputRef = useRef("English");
   const clearedOnFocusRef = useRef(false);
   const latestInputRef = useRef("English");
+  const isApplyingTranslationRef = useRef(false);
+  const retranslateTimeoutRef = useRef<number | null>(null);
 
   const filteredLanguages = useMemo(() => {
     const query = languageInput.trim().toLowerCase();
@@ -105,6 +112,25 @@ export function PageTranslator() {
   useEffect(() => {
     latestInputRef.current = languageInput;
   }, [languageInput]);
+
+  useEffect(() => {
+    localStorage.setItem("page-translator-language", activeLanguage);
+    window.dispatchEvent(
+      new CustomEvent("page-translator:language-changed", {
+        detail: {
+          language: activeLanguage
+        }
+      })
+    );
+  }, [activeLanguage]);
+
+  useEffect(() => {
+    return () => {
+      if (retranslateTimeoutRef.current !== null) {
+        window.clearTimeout(retranslateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   function findLanguage(value: string) {
     const normalizedValue = value.trim().toLowerCase();
@@ -175,6 +201,43 @@ export function PageTranslator() {
     }
   }, [activeLanguage, languages, open]);
 
+  useEffect(() => {
+    function handleTranslatorRefresh() {
+      if (activeLanguage === "en") {
+        return;
+      }
+
+      window.setTimeout(() => {
+        void handleTranslate(activeLanguage, false, "augment");
+      }, 60);
+    }
+
+    function handleTranslateElement(event: Event) {
+      if (activeLanguage === "en") {
+        return;
+      }
+
+      const detail = (event as CustomEvent<TranslateElementDetail>).detail;
+      const element = detail?.element;
+
+      if (!element) {
+        return;
+      }
+
+      window.setTimeout(() => {
+        void handleTranslate(activeLanguage, false, "augment", element);
+      }, 20);
+    }
+
+    window.addEventListener("page-translator:refresh", handleTranslatorRefresh);
+    window.addEventListener("page-translator:translate-element", handleTranslateElement);
+
+    return () => {
+      window.removeEventListener("page-translator:refresh", handleTranslatorRefresh);
+      window.removeEventListener("page-translator:translate-element", handleTranslateElement);
+    };
+  }, [activeLanguage]);
+
   function restoreOriginalText() {
     currentNodesRef.current.forEach(({ node, originalText }) => {
       node.textContent = originalText;
@@ -199,51 +262,139 @@ export function PageTranslator() {
     event.stopPropagation();
   }
 
-  async function handleTranslate(targetLanguage: string, announce = true) {
+  async function translateNodes(nodes: TranslatableNode[], targetLanguage: string) {
+    const texts = nodes.map((entry) => entry.originalText);
+
+    if (!texts.length) {
+      return;
+    }
+
+    const payload = await fetchJson<{ translations: string[] }>("/api/translate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        targetLanguage,
+        texts
+      })
+    });
+
+    nodes.forEach((entry, index) => {
+      entry.node.textContent = payload.translations[index] ?? entry.originalText;
+    });
+  }
+
+  function scheduleRetranslate() {
+    if (activeLanguage === "en" || isApplyingTranslationRef.current) {
+      return;
+    }
+
+    if (retranslateTimeoutRef.current !== null) {
+      window.clearTimeout(retranslateTimeoutRef.current);
+    }
+
+    retranslateTimeoutRef.current = window.setTimeout(() => {
+      void handleTranslate(activeLanguage, false, "augment");
+    }, 120);
+  }
+
+  useEffect(() => {
+    if (activeLanguage === "en") {
+      return undefined;
+    }
+
+    const observer = new MutationObserver((mutations) => {
+      if (isApplyingTranslationRef.current) {
+        return;
+      }
+
+      const shouldRetranslate = mutations.some((mutation) => {
+        if (mutation.type === "characterData") {
+          return false;
+        }
+
+        return Array.from(mutation.addedNodes).some((node) => {
+          if (!(node instanceof HTMLElement) && !(node instanceof Text)) {
+            return false;
+          }
+
+          const parentElement = node instanceof HTMLElement ? node : node.parentElement;
+          return !parentElement?.closest("[data-no-translate='true']");
+        });
+      });
+
+      if (shouldRetranslate) {
+        scheduleRetranslate();
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: false
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeLanguage]);
+
+  async function handleTranslate(
+    targetLanguage: string,
+    announce = true,
+    mode: TranslationMode = "full",
+    root: Node = document.body
+  ) {
     setTranslating(true);
+    isApplyingTranslationRef.current = true;
 
     try {
-      restoreOriginalText();
-
       if (targetLanguage === "en") {
+        restoreOriginalText();
         currentNodesRef.current = [];
         setActiveLanguage("en");
         return;
       }
 
-      const nodes = collectTranslatableNodes();
-      const texts = nodes.map((entry) => entry.originalText);
+      if (mode === "full") {
+        restoreOriginalText();
+        const nodes = collectTranslatableNodes(document.body);
 
-      if (!texts.length) {
-        currentNodesRef.current = [];
+        if (!nodes.length) {
+          currentNodesRef.current = [];
+          setActiveLanguage(targetLanguage);
+          return;
+        }
+
+        await translateNodes(nodes, targetLanguage);
+        currentNodesRef.current = nodes;
         setActiveLanguage(targetLanguage);
         return;
       }
 
-      const payload = await fetchJson<{ translations: string[] }>("/api/translate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          targetLanguage,
-          texts
-        })
-      });
+      const knownNodes = new Set(currentNodesRef.current.map((entry) => entry.node));
+      const newNodes = collectTranslatableNodes(root).filter((entry) => !knownNodes.has(entry.node));
 
-      nodes.forEach((entry, index) => {
-        entry.node.textContent = payload.translations[index] ?? entry.originalText;
-      });
+      if (!newNodes.length) {
+        setActiveLanguage(targetLanguage);
+        return;
+      }
 
-      currentNodesRef.current = nodes;
+      await translateNodes(newNodes, targetLanguage);
+      currentNodesRef.current = [...currentNodesRef.current, ...newNodes];
       setActiveLanguage(targetLanguage);
     } catch (error) {
-      restoreOriginalText();
-      currentNodesRef.current = [];
+      if (mode === "full") {
+        restoreOriginalText();
+        currentNodesRef.current = [];
+      }
+
       if (announce) {
         toast.error(error instanceof Error ? error.message : "Unable to translate this page.");
       }
     } finally {
+      isApplyingTranslationRef.current = false;
       setTranslating(false);
     }
   }

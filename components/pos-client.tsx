@@ -2,7 +2,7 @@
 
 import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,26 @@ type PosClientProps = {
   employee: SessionEmployee;
   menuItems: MenuItemRecord[];
   ingredients: IngredientRecord[];
+};
+
+type ModalTranslations = {
+  customizeDrink: string;
+  itemName: string;
+  description: string;
+  basePrice: string;
+  quantity: string;
+  sweetness: string;
+  ice: string;
+  iceOptions: string[];
+  extraIngredients: string;
+  extraIngredientsDescription: string;
+  ingredientNames: string[];
+  ingredientCosts: string[];
+  remove: string;
+  add: string;
+  itemTotal: string;
+  cancel: string;
+  addToCart: string;
 };
 
 const sweetnessOptions = [0, 25, 50, 75, 100] as const;
@@ -50,6 +70,24 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
   const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
   const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
   const [checkoutPending, setCheckoutPending] = useState(false);
+  const [translatorLanguage, setTranslatorLanguage] = useState("en");
+  const [modalTranslations, setModalTranslations] = useState<ModalTranslations | null>(null);
+  const modalContentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setTranslatorLanguage(localStorage.getItem("page-translator-language") ?? "en");
+
+    function handleLanguageChanged(event: Event) {
+      const detail = (event as CustomEvent<{ language?: string }>).detail;
+      setTranslatorLanguage(detail?.language ?? "en");
+    }
+
+    window.addEventListener("page-translator:language-changed", handleLanguageChanged);
+
+    return () => {
+      window.removeEventListener("page-translator:language-changed", handleLanguageChanged);
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedItem) {
@@ -57,8 +95,107 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
       setSweetness(100);
       setIce(2);
       setSelectedIngredients({});
+      setModalTranslations(null);
+      return;
     }
+
+    window.setTimeout(() => {
+      window.dispatchEvent(new Event("page-translator:refresh"));
+      window.dispatchEvent(
+        new CustomEvent("page-translator:translate-element", {
+          detail: {
+            element: modalContentRef.current
+          }
+        })
+      );
+    }, 50);
   }, [selectedItem]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function translateModalCopy() {
+      if (!selectedItem) {
+        return;
+      }
+
+      if (translatorLanguage === "en") {
+        setModalTranslations(null);
+        return;
+      }
+
+      const ingredientCostTexts = ingredients.map((ingredient) => `+${formatCurrency(ingredient.addCost)} each`);
+      const texts = [
+        "Customize Drink",
+        selectedItem.name,
+        "Pick sweetness, ice, and any extra ingredients before adding to the cart.",
+        "Base price",
+        "Quantity",
+        "Sweetness",
+        "Ice",
+        ...iceOptions.map((option) => option.label),
+        "Extra Ingredients",
+        "Choose any extras you want to add to this drink.",
+        ...ingredients.map((ingredient) => ingredient.name),
+        ...ingredientCostTexts,
+        "Remove",
+        "Add",
+        "Item total",
+        "Cancel",
+        "Add to Cart"
+      ];
+
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          targetLanguage: translatorLanguage,
+          texts
+        })
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { translations?: string[] };
+      const translated = payload.translations ?? [];
+
+      if (cancelled || translated.length < texts.length) {
+        return;
+      }
+
+      let index = 0;
+
+      setModalTranslations({
+        customizeDrink: translated[index++] ?? "Customize Drink",
+        itemName: translated[index++] ?? selectedItem.name,
+        description: translated[index++] ?? "Pick sweetness, ice, and any extra ingredients before adding to the cart.",
+        basePrice: translated[index++] ?? "Base price",
+        quantity: translated[index++] ?? "Quantity",
+        sweetness: translated[index++] ?? "Sweetness",
+        ice: translated[index++] ?? "Ice",
+        iceOptions: iceOptions.map(() => translated[index++] ?? ""),
+        extraIngredients: translated[index++] ?? "Extra Ingredients",
+        extraIngredientsDescription: translated[index++] ?? "Choose any extras you want to add to this drink.",
+        ingredientNames: ingredients.map(() => translated[index++] ?? ""),
+        ingredientCosts: ingredients.map(() => translated[index++] ?? ""),
+        remove: translated[index++] ?? "Remove",
+        add: translated[index++] ?? "Add",
+        itemTotal: translated[index++] ?? "Item total",
+        cancel: translated[index++] ?? "Cancel",
+        addToCart: translated[index++] ?? "Add to Cart"
+      });
+    }
+
+    void translateModalCopy();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ingredients, selectedItem, translatorLanguage]);
 
   const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
 
@@ -258,12 +395,21 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
 
       {selectedItem ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-[rgb(var(--surface))]">
+          <div
+            ref={modalContentRef}
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-[rgb(var(--surface))]"
+          >
             <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-border bg-[rgb(var(--surface))] p-6">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Customize Drink</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight">{selectedItem.name}</h2>
-                <p className="mt-2 text-sm text-stone-500">Pick sweetness, ice, and any extra ingredients before adding to the cart.</p>
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">
+                  {modalTranslations?.customizeDrink ?? "Customize Drink"}
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+                  {modalTranslations?.itemName ?? selectedItem.name}
+                </h2>
+                <p className="mt-2 text-sm text-stone-500">
+                  {modalTranslations?.description ?? "Pick sweetness, ice, and any extra ingredients before adding to the cart."}
+                </p>
               </div>
               <button
                 type="button"
@@ -278,13 +424,15 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
             <div className="space-y-6 p-6">
               <div className="rounded-xl border border-border bg-[rgb(var(--surface-alt))] p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium">Base price</span>
+                  <span className="font-medium">{modalTranslations?.basePrice ?? "Base price"}</span>
                   <span className="text-lg font-semibold">{formatCurrency(selectedItem.cost)}</span>
                 </div>
               </div>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">Quantity</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">
+                  {modalTranslations?.quantity ?? "Quantity"}
+                </h3>
                 <div className="flex items-center gap-3">
                   <Button variant="outline" size="icon" onClick={() => setQuantity((current) => Math.max(1, current - 1))}>
                     <Minus className="h-4 w-4" />
@@ -299,7 +447,9 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">Sweetness</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">
+                  {modalTranslations?.sweetness ?? "Sweetness"}
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {sweetnessOptions.map((option) => (
                     <button
@@ -320,7 +470,9 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">Ice</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">
+                  {modalTranslations?.ice ?? "Ice"}
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {iceOptions.map((option) => (
                     <button
@@ -334,7 +486,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                           : "border-border bg-white text-foreground hover:bg-[rgb(var(--muted))]"
                       )}
                     >
-                      {option.label}
+                      {modalTranslations?.iceOptions[option.value] ?? option.label}
                     </button>
                   ))}
                 </div>
@@ -342,28 +494,34 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
 
               <section className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">Extra Ingredients</h3>
-                  <p className="mt-1 text-sm text-stone-500">Choose any extras you want to add to this drink.</p>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">
+                    {modalTranslations?.extraIngredients ?? "Extra Ingredients"}
+                  </h3>
+                  <p className="mt-1 text-sm text-stone-500">
+                    {modalTranslations?.extraIngredientsDescription ?? "Choose any extras you want to add to this drink."}
+                  </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {ingredients.map((ingredient) => {
+                  {ingredients.map((ingredient, index) => {
                     const selectedQuantity = selectedIngredients[ingredient.id] ?? 0;
 
                     return (
                       <div key={ingredient.id} className="rounded-xl border border-border bg-[rgb(var(--surface-alt))] p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <div className="font-semibold">{ingredient.name}</div>
-                            <div className="mt-1 text-sm text-stone-500">+{formatCurrency(ingredient.addCost)} each</div>
+                            <div className="font-semibold">{modalTranslations?.ingredientNames[index] ?? ingredient.name}</div>
+                            <div className="mt-1 text-sm text-stone-500">
+                              {modalTranslations?.ingredientCosts[index] ?? `+${formatCurrency(ingredient.addCost)} each`}
+                            </div>
                           </div>
                           <div className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">{selectedQuantity}</div>
                         </div>
                         <div className="mt-4 flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => updateIngredient(ingredient.id, -1)} className="flex-1">
-                            Remove
+                            {modalTranslations?.remove ?? "Remove"}
                           </Button>
                           <Button size="sm" onClick={() => updateIngredient(ingredient.id, 1)} className="flex-1">
-                            Add
+                            {modalTranslations?.add ?? "Add"}
                           </Button>
                         </div>
                       </div>
@@ -374,7 +532,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
 
               <div className="rounded-xl border border-border bg-[rgb(var(--surface-alt))] p-5">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Item total</span>
+                  <span className="font-medium">{modalTranslations?.itemTotal ?? "Item total"}</span>
                   <span className="text-2xl font-semibold">
                     {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, ingredients))}
                   </span>
@@ -383,9 +541,9 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
 
               <div className="flex flex-wrap justify-end gap-3">
                 <Button variant="outline" onClick={closeModal}>
-                  Cancel
+                  {modalTranslations?.cancel ?? "Cancel"}
                 </Button>
-                <Button onClick={addSelectedItem}>Add to Cart</Button>
+                <Button onClick={addSelectedItem}>{modalTranslations?.addToCart ?? "Add to Cart"}</Button>
               </div>
             </div>
           </div>
