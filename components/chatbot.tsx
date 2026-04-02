@@ -1,18 +1,74 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 
-import type { MenuItemRecord, OrderItemInput } from "@/lib/types";
+import { useOrderStore } from "@/lib/stores/order-store";
+import type { IngredientRecord, MenuItemRecord, OrderItemInput } from "@/lib/types";
 
 type ChatbotProps = {
   cartItems: OrderItemInput[];
+  ingredients: IngredientRecord[];
   menuItems: MenuItemRecord[];
 };
 
-export default function Chatbot({ cartItems, menuItems }: ChatbotProps) {
+type ChatAction =
+  | {
+      type: "none";
+    }
+  | {
+      type: "add_to_cart";
+      itemName: string;
+      quantity?: number;
+      sweetness?: number;
+      ice?: number;
+      extras?: Array<{
+        name: string;
+        quantity?: number;
+      }>;
+    }
+  | {
+      type: "edit_cart_item";
+      cartIndex: number;
+      itemName?: string;
+      quantity?: number;
+      sweetness?: number;
+      ice?: number;
+      extras?: Array<{
+        name: string;
+        quantity?: number;
+      }>;
+    };
+
+function normalizeName(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export default function Chatbot({ cartItems, ingredients, menuItems }: ChatbotProps) {
+  const addItem = useOrderStore((state) => state.addItem);
+  const updateItem = useOrderStore((state) => state.updateItem);
   const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+
+  function buildIngredientChoices(extras: Array<{ name: string; quantity?: number }>) {
+    return extras
+      .map((extra) => {
+        const ingredient = ingredients.find((item) => normalizeName(item.name) === normalizeName(extra.name));
+
+        if (!ingredient) {
+          return null;
+        }
+
+        return {
+          ingredientId: ingredient.id,
+          quantity: Math.max(1, Math.min(10, Math.round(extra.quantity ?? 1))),
+          addCost: ingredient.addCost,
+          name: ingredient.name
+        };
+      })
+      .filter((choice): choice is NonNullable<typeof choice> => choice !== null);
+  }
 
   async function sendMessage() {
     if (!input.trim() || isSending) return;
@@ -36,7 +92,14 @@ export default function Chatbot({ cartItems, menuItems }: ChatbotProps) {
             role: message.from === "user" ? "user" : "assistant",
             content: message.text
           })),
-          cartItems,
+          cartItems: cartItems.map((item, index) => ({
+            cartIndex: index + 1,
+            ...item
+          })),
+          ingredients: ingredients.map((ingredient) => ({
+            name: ingredient.name,
+            addCost: ingredient.addCost
+          })),
           menuItems: menuItems.map((item) => ({
             name: item.name,
             cost: item.cost
@@ -44,7 +107,7 @@ export default function Chatbot({ cartItems, menuItems }: ChatbotProps) {
         })
       });
 
-      const data = (await res.json()) as { reply?: string };
+      const data = (await res.json()) as { reply?: string; action?: ChatAction };
       setMessages((m) => [
         ...m,
         {
@@ -52,6 +115,97 @@ export default function Chatbot({ cartItems, menuItems }: ChatbotProps) {
           text: data.reply ?? "I can help with boba drinks, toppings, and cart suggestions."
         }
       ]);
+      const action = data.action;
+
+      if (action?.type === "add_to_cart") {
+        const menuItem = menuItems.find((item) => normalizeName(item.name) === normalizeName(action.itemName));
+
+        if (!menuItem) {
+          setMessages((m) => [
+            ...m,
+            {
+              from: "bot",
+              text: `I couldn't add "${action.itemName}" because it isn't on the current menu.`
+            }
+          ]);
+          return;
+        }
+
+        const quantity = Math.max(1, Math.min(20, Math.round(action.quantity ?? 1)));
+        const sweetness = [0, 25, 50, 75, 100].includes(action.sweetness ?? 100) ? (action.sweetness ?? 100) : 100;
+        const ice = [0, 1, 2, 3].includes(action.ice ?? 2) ? (action.ice ?? 2) : 2;
+
+        const ingredientChoices = buildIngredientChoices(action.extras ?? []);
+
+        const addOnCost = ingredientChoices.reduce((sum, choice) => sum + choice.addCost * choice.quantity, 0);
+
+        addItem({
+          itemId: menuItem.id,
+          itemName: menuItem.name,
+          quantity,
+          sweetness,
+          ice,
+          ingredientChoices,
+          cost: (menuItem.cost + addOnCost) * quantity
+        });
+
+        toast.success(`${menuItem.name} added to cart from chat.`);
+      }
+
+      if (action?.type === "edit_cart_item") {
+        const itemIndex = action.cartIndex - 1;
+        const existingItem = cartItems[itemIndex];
+
+        if (!existingItem) {
+          setMessages((m) => [
+            ...m,
+            {
+              from: "bot",
+              text: `I couldn't find cart line ${action.cartIndex} to update.`
+            }
+          ]);
+          return;
+        }
+
+        const nextItemName = action.itemName ?? existingItem.itemName;
+        const menuItem = menuItems.find((item) => normalizeName(item.name) === normalizeName(nextItemName));
+
+        if (!menuItem) {
+          setMessages((m) => [
+            ...m,
+            {
+              from: "bot",
+              text: `I couldn't update that drink because "${nextItemName}" isn't on the current menu.`
+            }
+          ]);
+          return;
+        }
+
+        const quantity = Math.max(1, Math.min(20, Math.round(action.quantity ?? existingItem.quantity)));
+        const sweetnessSource = action.sweetness ?? existingItem.sweetness;
+        const sweetness = [0, 25, 50, 75, 100].includes(sweetnessSource) ? sweetnessSource : existingItem.sweetness;
+        const iceSource = action.ice ?? existingItem.ice;
+        const ice = [0, 1, 2, 3].includes(iceSource) ? iceSource : existingItem.ice;
+
+        const ingredientChoices =
+          action.extras !== undefined
+            ? buildIngredientChoices(action.extras)
+            : existingItem.ingredientChoices;
+
+        const addOnCost = ingredientChoices.reduce((sum, choice) => sum + choice.addCost * choice.quantity, 0);
+
+        updateItem(itemIndex, {
+          itemId: menuItem.id,
+          itemName: menuItem.name,
+          quantity,
+          sweetness,
+          ice,
+          ingredientChoices,
+          cost: (menuItem.cost + addOnCost) * quantity
+        });
+
+        toast.success(`Cart line ${action.cartIndex} updated from chat.`);
+      }
     } catch {
       setMessages((m) => [
         ...m,

@@ -6,6 +6,7 @@ type ChatMessage = {
 };
 
 type CartItem = {
+  cartIndex?: number;
   itemName: string;
   quantity: number;
   sweetness: number;
@@ -21,6 +22,39 @@ type MenuItem = {
   name: string;
   cost: number;
 };
+
+type Ingredient = {
+  name: string;
+  addCost: number;
+};
+
+type ChatAction =
+  | {
+      type: "none";
+    }
+  | {
+      type: "add_to_cart";
+      itemName: string;
+      quantity?: number;
+      sweetness?: number;
+      ice?: number;
+      extras?: Array<{
+        name: string;
+        quantity?: number;
+      }>;
+    }
+  | {
+      type: "edit_cart_item";
+      cartIndex: number;
+      itemName?: string;
+      quantity?: number;
+      sweetness?: number;
+      ice?: number;
+      extras?: Array<{
+        name: string;
+        quantity?: number;
+      }>;
+    };
 
 function formatMoney(amount: number) {
   return `$${amount.toFixed(2)}`;
@@ -61,6 +95,7 @@ function buildCartSummary(cartItems: CartItem[]) {
         : "no extras";
 
     return [
+      `cart line ${item.cartIndex ?? 0}`,
       `${item.quantity}x ${item.itemName}`,
       `sweetness ${item.sweetness}%`,
       describeIceLevel(item.ice),
@@ -73,6 +108,14 @@ function buildCartSummary(cartItems: CartItem[]) {
   return `${lines.join("\n")}\nCart total: ${formatMoney(total)}`;
 }
 
+function buildIngredientSummary(ingredients: Ingredient[]) {
+  if (ingredients.length === 0) {
+    return "No extra ingredients were provided.";
+  }
+
+  return ingredients.map((ingredient) => `${ingredient.name} (${formatMoney(ingredient.addCost)})`).join(", ");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
@@ -80,12 +123,14 @@ export async function POST(req: NextRequest) {
       history?: ChatMessage[];
       cartItems?: CartItem[];
       menuItems?: MenuItem[];
+      ingredients?: Ingredient[];
     };
 
     const message = body.message?.trim();
     const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
     const cartItems = Array.isArray(body.cartItems) ? body.cartItems : [];
     const menuItems = Array.isArray(body.menuItems) ? body.menuItems : [];
+    const ingredients = Array.isArray(body.ingredients) ? body.ingredients : [];
 
     if (!message) {
       return NextResponse.json({ reply: "Please type a boba shop question first." }, { status: 400 });
@@ -107,9 +152,18 @@ export async function POST(req: NextRequest) {
       "Use the current cart and menu context when answering.",
       "When the user asks for suggestions, recommend specific drinks or add-ons from the menu and explain why they fit.",
       "If the cart already has items, suggest complementary drinks, topping tweaks, or sweetness/ice adjustments.",
+      "You may help add drinks to the cart by returning an add_to_cart action only when the user clearly asks to add an item.",
+      "You may help edit an existing cart drink by returning an edit_cart_item action when the user clearly asks to change a drink already in the cart.",
+      "Use the provided cart line number to target the correct existing drink.",
+      "Only use exact menu item names and exact extra ingredient names from the provided lists.",
+      "If details like sweetness, ice, quantity, or extras are not specified, use sensible defaults: quantity 1, sweetness 100, ice 2, extras [].",
+      "If the user is ambiguous about which drink to add, ask a follow-up question instead of creating an action.",
+      "If the user is ambiguous about which cart item to edit, ask a follow-up question instead of creating an action.",
       "Do not invent unavailable products or claim to complete payment, modify inventory, or place orders yourself.",
       "Keep answers short, warm, and practical, like an employee helping a customer at the counter.",
+      'Return valid JSON with this shape: {"reply":"string","action":{"type":"none"}}, {"reply":"string","action":{"type":"add_to_cart","itemName":"string","quantity":1,"sweetness":100,"ice":2,"extras":[{"name":"Boba","quantity":1}]}} or {"reply":"string","action":{"type":"edit_cart_item","cartIndex":1,"itemName":"Taro Milk Tea","quantity":2,"sweetness":50,"ice":1,"extras":[{"name":"Boba","quantity":1}]}}.',
       `Menu items: ${buildMenuSummary(menuItems)}`,
+      `Available extra ingredients: ${buildIngredientSummary(ingredients)}`,
       `Current cart:\n${buildCartSummary(cartItems)}`
     ].join("\n");
 
@@ -122,7 +176,10 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         temperature: 0.7,
-        max_tokens: 250,
+        max_tokens: 350,
+        response_format: {
+          type: "json_object"
+        },
         messages: [
           { role: "system", content: systemPrompt },
           ...history.map((entry) => ({
@@ -150,12 +207,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const reply = data.choices?.[0]?.message?.content?.trim();
+    const content = data.choices?.[0]?.message?.content;
+    let parsed: { reply?: string; action?: ChatAction } | null = null;
+
+    if (typeof content === "string") {
+      try {
+        parsed = JSON.parse(content) as { reply?: string; action?: ChatAction };
+      } catch {
+        parsed = { reply: content, action: { type: "none" } };
+      }
+    }
+
+    const reply = parsed?.reply?.trim();
+    const action = parsed?.action;
 
     return NextResponse.json({
       reply:
         reply ??
-        "I can help with drinks, toppings, cart questions, and boba suggestions. What would you like to order?"
+        "I can help with drinks, toppings, cart questions, and boba suggestions. What would you like to order?",
+      action: action?.type === "add_to_cart" || action?.type === "edit_cart_item" ? action : { type: "none" }
     });
   } catch {
     return NextResponse.json(

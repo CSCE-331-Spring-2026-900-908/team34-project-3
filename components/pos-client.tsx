@@ -388,7 +388,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
             </CardContent>
           </Card>
           {/* Chatbot under checkout */}
-          <Chatbot cartItems={items} menuItems={menuItems} />
+          <Chatbot cartItems={items} ingredients={ingredients} menuItems={menuItems} />
 
         </div>
       </div>
