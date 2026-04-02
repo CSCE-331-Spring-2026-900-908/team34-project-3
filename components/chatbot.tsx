@@ -2,24 +2,67 @@
 
 import { useState } from "react";
 
-export default function Chatbot() {
+import type { MenuItemRecord, OrderItemInput } from "@/lib/types";
+
+type ChatbotProps = {
+  cartItems: OrderItemInput[];
+  menuItems: MenuItemRecord[];
+};
+
+export default function Chatbot({ cartItems, menuItems }: ChatbotProps) {
   const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([]);
   const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
 
   async function sendMessage() {
-    if (!input.trim()) return;
+    if (!input.trim() || isSending) return;
 
-    const userMessage = input;
+    const userMessage = input.trim();
+    const nextMessages = [...messages, { from: "user" as const, text: userMessage }];
+
+    setIsSending(true);
     setMessages((m) => [...m, { from: "user", text: userMessage }]);
     setInput("");
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      body: JSON.stringify({ message: userMessage }),
-    });
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          history: nextMessages.slice(-8).map((message) => ({
+            role: message.from === "user" ? "user" : "assistant",
+            content: message.text
+          })),
+          cartItems,
+          menuItems: menuItems.map((item) => ({
+            name: item.name,
+            cost: item.cost
+          }))
+        })
+      });
 
-    const data = await res.json();
-    setMessages((m) => [...m, { from: "bot", text: data.reply }]);
+      const data = (await res.json()) as { reply?: string };
+      setMessages((m) => [
+        ...m,
+        {
+          from: "bot",
+          text: data.reply ?? "I can help with boba drinks, toppings, and cart suggestions."
+        }
+      ]);
+    } catch {
+      setMessages((m) => [
+        ...m,
+        {
+          from: "bot",
+          text: "I’m having trouble answering right now, but I can still help with boba menu questions in a moment."
+        }
+      ]);
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (
@@ -40,13 +83,19 @@ export default function Chatbot() {
           className="flex-1 border rounded p-2"
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              void sendMessage();
+            }
+          }}
           placeholder="Ask something…"
         />
         <button
-          onClick={sendMessage}
-          className="bg-black text-white px-3 py-2 rounded"
+          onClick={() => void sendMessage()}
+          disabled={isSending}
+          className="bg-black text-white px-3 py-2 rounded disabled:opacity-60"
         >
-          Send
+          {isSending ? "..." : "Send"}
         </button>
       </div>
     </div>
