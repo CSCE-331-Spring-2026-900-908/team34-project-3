@@ -3,7 +3,9 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { portalDestinations } from "@/lib/portal";
 
-export default function HomePage() {
+// The home page
+export default function HomePage()
+{
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-8">
       <Card className="w-full max-w-4xl">

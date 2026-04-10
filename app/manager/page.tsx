@@ -6,10 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { TopBar } from "@/components/top-bar";
 import { requireEmployeePage } from "@/lib/auth";
 
-export default async function ManagerPage() {
+// Returns the page for the manager
+export default async function ManagerPage()
+{
   const employee = await requireEmployeePage();
 
-  if (!employee.isManager) {
+  // If the employee is not a manager, they have no access to this page
+  if (!employee.isManager)
+  {
     redirect("/pos");
   }
 
