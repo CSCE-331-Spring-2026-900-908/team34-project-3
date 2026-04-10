@@ -18,11 +18,11 @@ export const portalDestinations: PortalDestination[] = [
   {
     title: "Customer Kiosk",
     description: "UNDER CONSTRUCTION...",
-    href: "/kiosk"
+    href: "/customer-login?next=/kiosk"
   },
   {
-    title: "Menu Board",
-    description: "UNDER CONSTRUCTION...",
+    title: "Customer Menu",
+    description: "Browse the drink menu and compare prices before ordering.",
     href: "/menu-board"
   }
 ];

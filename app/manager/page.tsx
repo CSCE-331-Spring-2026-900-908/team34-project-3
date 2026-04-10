@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TopBar } from "@/components/top-bar";
 import { requireEmployeePage } from "@/lib/auth";
@@ -18,8 +19,9 @@ export default async function ManagerPage()
 
   return (
     <>
+      <SkipLink />
       <TopBar title="Manager" employeeLabel={`${employee.fullName} (Manager)`} />
-      <main className="shell-frame">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-frame">
         <Card className="max-w-2xl">
           <CardHeader>
             <CardTitle>Manager Dashboard</CardTitle>

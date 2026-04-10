@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 
-import { getSessionEmployee } from "@/lib/session";
+import { getSessionCustomer, getSessionEmployee } from "@/lib/session";
 
 export async function requireEmployeePage() {
   const employee = await getSessionEmployee();
@@ -11,6 +11,16 @@ export async function requireEmployeePage() {
   }
 
   return employee;
+}
+
+export async function requireCustomerPage() {
+  const customer = await getSessionCustomer();
+
+  if (!customer) {
+    redirect("/customer-login?next=/kiosk");
+  }
+
+  return customer;
 }
 
 export function unauthorizedJson(message = "Unauthorized") {
