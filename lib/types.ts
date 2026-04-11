@@ -20,6 +20,7 @@ export type MenuItemRecord = {
   name: string;
   cost: number;
   ingredients: Record<number, number>;
+  imageUrl: string;
 };
 
 export type IngredientRestockRecord = {
