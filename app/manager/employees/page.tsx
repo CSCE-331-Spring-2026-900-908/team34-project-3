@@ -21,7 +21,7 @@ export default async function EmployeesPage() {
       <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen bg-[rgb(var(--background))]">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <PageHeader
-            icon={Users}
+            icon={<Users className="h-7 w-7" />}
             sectionLabel="Employees"
             title="Employee Management"
             subtitle="Add and edit employee accounts."

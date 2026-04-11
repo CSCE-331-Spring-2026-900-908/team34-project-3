@@ -25,7 +25,7 @@ export default async function InventoryPage() {
       <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen bg-[rgb(var(--background))]">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <PageHeader
-            icon={Package}
+            icon={<Package className="h-7 w-7" />}
             sectionLabel="Inventory"
             title="Orders & Inventory"
             subtitle="Track stock levels and manage restock orders."

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ type PageHeaderLink = {
 };
 
 type PageHeaderProps = {
-  icon: LucideIcon;
+  icon: ReactNode;
   sectionLabel: string;
   title: string;
   subtitle?: string;
@@ -25,7 +25,7 @@ type PageHeaderProps = {
 };
 
 export function PageHeader({
-  icon: Icon,
+  icon,
   sectionLabel,
   title,
   subtitle,
@@ -46,7 +46,7 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-[rgb(var(--surface))] p-5">
       <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-border bg-[rgb(var(--surface-alt))] text-foreground">
-        <Icon className="h-7 w-7" />
+        {icon}
       </div>
 
       <div className="min-w-0 flex-1">
