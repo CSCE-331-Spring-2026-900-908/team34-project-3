@@ -20,6 +20,7 @@ export function EmployeeManagementClient({ employees }: Props) {
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeRecord | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
   const [isManager, setIsManager] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -27,6 +28,7 @@ export function EmployeeManagementClient({ employees }: Props) {
     setSelectedEmployee(employee);
     setFirstName(employee.firstName);
     setLastName(employee.lastName);
+    setEmail(employee.email ?? "");
     setIsManager(employee.isManager);
   }
 
@@ -34,6 +36,7 @@ export function EmployeeManagementClient({ employees }: Props) {
     setSelectedEmployee(null);
     setFirstName("");
     setLastName("");
+    setEmail("");
     setIsManager(false);
   }
 
@@ -42,15 +45,16 @@ export function EmployeeManagementClient({ employees }: Props) {
 
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
+    const trimmedEmail = email.trim().toLowerCase();
 
-    if (!trimmedFirst || !trimmedLast) {
-      toast.error("First and last name are required.");
+    if (!trimmedFirst || !trimmedLast || !trimmedEmail) {
+      toast.error("First name, last name, and email are required.");
       return;
     }
 
     setSubmitting(true);
 
-    const body = { firstName: trimmedFirst, lastName: trimmedLast, isManager };
+    const body = { firstName: trimmedFirst, lastName: trimmedLast, email: trimmedEmail, isManager };
 
     const url = selectedEmployee
       ? `/api/employees/${selectedEmployee.employeeId}`
@@ -103,10 +107,18 @@ export function EmployeeManagementClient({ employees }: Props) {
                     {emp.firstName} {emp.lastName}
                   </p>
                   <p className="text-sm text-stone-500">ID: {emp.employeeId}</p>
+                  <p className="text-sm text-stone-500">{emp.email ?? "No email linked yet"}</p>
                 </div>
-                {emp.isManager ? (
-                  <Badge className="border-blue-300 text-blue-700">Manager</Badge>
-                ) : null}
+                <div className="flex flex-col items-end gap-2">
+                  {emp.isManager ? (
+                    <Badge className="border-blue-300 text-blue-700">Manager</Badge>
+                  ) : (
+                    <Badge className="bg-white text-stone-700">Cashier</Badge>
+                  )}
+                  <Badge className="bg-white text-stone-700">
+                    {emp.hasGoogleAccount ? "OAuth linked" : "Awaiting first Google sign-in"}
+                  </Badge>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -141,6 +153,20 @@ export function EmployeeManagementClient({ employees }: Props) {
                   onChange={(event) => setLastName(event.target.value)}
                   placeholder="Enter last name"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Google Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="employee@example.com"
+                />
+                <p className="text-sm text-stone-500">
+                  This email controls Google OAuth access for the POS and manager views.
+                </p>
               </div>
 
               <div className="flex items-center gap-3">

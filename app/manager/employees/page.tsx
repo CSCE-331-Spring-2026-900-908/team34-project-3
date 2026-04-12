@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmployeeManagementClient } from "@/components/employee-management-client";
 import { requireEmployeePage } from "@/lib/auth";
 import { getEmployees } from "@/lib/db/employees";
+import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function EmployeesPage() {
   const employee = await requireEmployeePage();
@@ -26,11 +27,7 @@ export default async function EmployeesPage() {
             title="Employee Management"
             subtitle="Add and edit employee accounts."
             employeeBadge={`${employee.fullName} (Manager)`}
-            links={[
-              { href: "/manager" as Route, label: "Dashboard" },
-              { href: "/manager/inventory" as Route, label: "Inventory" },
-              { href: "/manager/menu-items" as Route, label: "Menu Items" },
-            ]}
+            links={getManagerNavLinks("/manager/employees" as Route)}
           />
           <EmployeeManagementClient employees={employees} />
         </div>

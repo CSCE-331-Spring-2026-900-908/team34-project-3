@@ -12,7 +12,7 @@ type GoogleProfile = {
 
 type AuthUserRow = {
   email: string;
-  googleId: string;
+  googleId: string | null;
   employeeId: number | null;
   fullName: string;
   firstName: string;
@@ -30,7 +30,7 @@ async function ensureAuthUserTable() {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS auth_user (
       email VARCHAR(320) PRIMARY KEY,
-      google_id VARCHAR(255) UNIQUE NOT NULL,
+      google_id VARCHAR(255) UNIQUE NULL,
       employee_id INT NULL REFERENCES employee(employee_id) ON DELETE SET NULL,
       full_name VARCHAR(255) NOT NULL,
       first_name VARCHAR(120) NOT NULL,
@@ -47,7 +47,18 @@ async function ensureAuthUserTable() {
   `);
 
   await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS auth_user_employee_id_unique_idx
+    ON auth_user(employee_id)
+    WHERE employee_id IS NOT NULL
+  `);
+
+  await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS auth_user_google_id_idx ON auth_user(google_id)
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE auth_user
+    ALTER COLUMN google_id DROP NOT NULL
   `);
 
   authUserTableEnsured = true;
@@ -94,8 +105,10 @@ export async function resolveGoogleUser(profile: GoogleProfile): Promise<{
     throw new Error("Unable to create or load the Google auth user.");
   }
 
+  const googleId = authUser.googleId ?? profile.sub;
+
   const customer: SessionCustomer = {
-    googleId: authUser.googleId,
+    googleId,
     email: authUser.email,
     role: "customer",
     fullName: authUser.fullName,
@@ -124,11 +137,60 @@ export async function resolveGoogleUser(profile: GoogleProfile): Promise<{
     lastName: authUser.lastName,
     fullName: authUser.fullName,
     email: authUser.email,
-    googleId: authUser.googleId,
+    googleId,
     role: employeeRecord.is_manager ? "manager" : "cashier",
     isManager: employeeRecord.is_manager,
     picture: authUser.picture ?? undefined
   };
 
   return { customer, employee };
+}
+
+export async function saveEmployeeGoogleAuthLink(input: {
+  employeeId: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+}) {
+  await ensureAuthUserTable();
+
+  const email = input.email.trim().toLowerCase();
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  await prisma.$executeRaw`
+    UPDATE auth_user
+    SET employee_id = NULL,
+        updated_at = NOW()
+    WHERE employee_id = ${input.employeeId}
+      AND email <> ${email}
+  `;
+
+  await prisma.$executeRaw`
+    INSERT INTO auth_user (email, google_id, employee_id, full_name, first_name, last_name, picture)
+    VALUES (${email}, NULL, ${input.employeeId}, ${fullName}, ${firstName}, ${lastName}, NULL)
+    ON CONFLICT (email) DO UPDATE SET
+      employee_id = EXCLUDED.employee_id,
+      full_name = CASE WHEN auth_user.google_id IS NULL THEN EXCLUDED.full_name ELSE auth_user.full_name END,
+      first_name = CASE WHEN auth_user.google_id IS NULL THEN EXCLUDED.first_name ELSE auth_user.first_name END,
+      last_name = CASE WHEN auth_user.google_id IS NULL THEN EXCLUDED.last_name ELSE auth_user.last_name END,
+      updated_at = NOW()
+  `;
+}
+
+export async function getEmployeeGoogleAuthMap() {
+  await ensureAuthUserTable();
+
+  const rows = await prisma.$queryRaw<Array<{
+    employeeId: number;
+    email: string;
+    googleId: string | null;
+  }>>`
+    SELECT employee_id AS "employeeId", email, google_id AS "googleId"
+    FROM auth_user
+    WHERE employee_id IS NOT NULL
+  `;
+
+  return new Map(rows.map((row) => [row.employeeId, row]));
 }

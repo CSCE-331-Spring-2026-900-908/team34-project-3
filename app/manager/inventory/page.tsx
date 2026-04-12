@@ -7,6 +7,7 @@ import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
 import { PageHeader } from "@/components/page-header";
 import { requireEmployeePage } from "@/lib/auth";
 import { getAllIngredients, getCriticalIngredients, getRestockOrders } from "@/lib/db/inventory";
+import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function InventoryPage() {
   const employee = await requireEmployeePage();
@@ -30,11 +31,7 @@ export default async function InventoryPage() {
             title="Orders & Inventory"
             subtitle="Track stock levels and manage restock orders."
             employeeBadge={`${employee.fullName} (Manager)`}
-            links={[
-              { href: "/manager" as Route, label: "Dashboard" },
-              { href: "/manager/employees" as Route, label: "Employees" },
-              { href: "/manager/menu-items" as Route, label: "Menu Items" },
-            ]}
+            links={getManagerNavLinks("/manager/inventory" as Route)}
           />
           <InventoryClient
             orders={orders}

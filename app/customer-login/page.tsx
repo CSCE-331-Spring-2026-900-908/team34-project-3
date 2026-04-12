@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 
+import { OauthSignInCard } from "@/components/oauth-sign-in-card";
 import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { sanitizeInternalRedirect } from "@/lib/portal";
 import { getSessionCustomer } from "@/lib/session";
 
@@ -39,31 +38,14 @@ export default async function CustomerLoginPage({ searchParams }: CustomerLoginP
     <>
       <SkipLink />
       <main id={MAIN_CONTENT_ID} tabIndex={-1} className="flex min-h-screen items-center justify-center px-4 py-8">
-        <Card className="w-full max-w-md overflow-hidden">
-          <CardHeader className="border-b border-border bg-[rgb(var(--surface-alt))]">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Customer Access</p>
-            <CardTitle className="mt-2 text-3xl">Sign In With Google</CardTitle>
-            <CardDescription>Customers can use Google to enter the kiosk experience.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-8">
-            <a
-              href={googleHref}
-              className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-foreground px-16 py-2.5 text-sm font-medium text-white transition hover:bg-black"
-            >
-              Continue with Google
-            </a>
-            <Link
-              href="/"
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-[rgb(var(--muted))]"
-            >
-              Back to Portal
-            </Link>
-            <p className="text-sm text-stone-600">
-              After sign-in, we create or refresh a database record for this email and use that to decide access.
-            </p>
-            {errorMessage ? <p className="text-sm text-danger">{errorMessage}</p> : null}
-          </CardContent>
-        </Card>
+        <OauthSignInCard
+          eyebrow="Customer Access"
+          title="Sign In With Google"
+          description="Customers can use Google to enter the kiosk experience."
+          googleHref={googleHref}
+          helperText="After sign-in, we create or refresh a database record for this email and use that to decide access."
+          errorMessage={errorMessage}
+        />
       </main>
     </>
   );

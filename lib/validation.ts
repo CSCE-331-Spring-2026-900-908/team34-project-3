@@ -42,6 +42,7 @@ export const completeOrderSchema = z.object({
 export const employeeFormSchema = z.object({
   firstName: z.string().trim().min(1, "First name cannot be empty."),
   lastName: z.string().trim().min(1, "Last name cannot be empty."),
+  email: z.string().trim().email("Enter a valid email address."),
   isManager: z.boolean()
 });
 

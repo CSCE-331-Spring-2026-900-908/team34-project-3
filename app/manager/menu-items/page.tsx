@@ -8,6 +8,7 @@ import { MenuItemManagementClient } from "@/components/menu-item-management-clie
 import { requireEmployeePage } from "@/lib/auth";
 import { getMenuItems } from "@/lib/db/menu-items";
 import { getAllIngredients } from "@/lib/db/inventory";
+import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function MenuItemsPage() {
   const employee = await requireEmployeePage();
@@ -30,11 +31,7 @@ export default async function MenuItemsPage() {
             title="Menu Item Management"
             subtitle="Create and update menu items and their ingredients."
             employeeBadge={`${employee.fullName} (Manager)`}
-            links={[
-              { href: "/manager" as Route, label: "Dashboard" },
-              { href: "/manager/inventory" as Route, label: "Inventory" },
-              { href: "/manager/employees" as Route, label: "Employees" },
-            ]}
+            links={getManagerNavLinks("/manager/menu-items" as Route)}
           />
           <MenuItemManagementClient menuItems={menuItems} ingredients={ingredients} />
         </div>

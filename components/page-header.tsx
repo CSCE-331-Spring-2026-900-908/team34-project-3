@@ -12,6 +12,7 @@ import { useOrderStore } from "@/lib/stores/order-store";
 type PageHeaderLink = {
   href: Route;
   label: string;
+  active?: boolean;
 };
 
 type PageHeaderProps = {
@@ -58,8 +59,12 @@ export function PageHeader({
       {links.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           {links.map((link) => (
-            <Link key={link.href} href={link.href}>
-              <Button variant="outline" size="sm" className="min-w-fit">
+            <Link key={link.href} href={link.href} aria-current={link.active ? "page" : undefined}>
+              <Button
+                variant={link.active ? "default" : "outline"}
+                size="sm"
+                className="min-w-fit"
+              >
                 {link.label}
               </Button>
             </Link>
