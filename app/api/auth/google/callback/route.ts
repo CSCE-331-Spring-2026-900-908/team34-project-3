@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { consumeCustomerAuth, saveCustomerSession } from "@/lib/session";
+import { resolveGoogleUser } from "@/lib/db/google-auth";
+import { sanitizeInternalRedirect } from "@/lib/portal";
+import { consumeGoogleAuth, saveCustomerSession, saveEmployeeSession } from "@/lib/session";
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -20,29 +22,41 @@ function getGoogleRedirectUri(request: NextRequest) {
   return process.env.GOOGLE_OAUTH_REDIRECT_URI ?? new URL("/api/auth/google/callback", request.url).toString();
 }
 
-function loginErrorUrl(request: NextRequest, error: string) {
-  return new URL(`/customer-login?error=${encodeURIComponent(error)}`, request.url);
+function loginErrorUrl(request: NextRequest, loginPath: string | null, error: string, nextPath: string | null) {
+  const safeLoginPath = sanitizeInternalRedirect(loginPath ?? undefined, "/login");
+  const url = new URL(safeLoginPath, request.url);
+  url.searchParams.set("error", error);
+
+  if (nextPath) {
+    url.searchParams.set("next", nextPath);
+  }
+
+  return url;
+}
+
+function requiresEmployeeAccess(nextPath: string | null) {
+  return !!nextPath && (nextPath.startsWith("/pos") || nextPath.startsWith("/manager"));
 }
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const state = request.nextUrl.searchParams.get("state");
   const denied = request.nextUrl.searchParams.get("error");
-  const { authState, nextPath } = await consumeCustomerAuth();
+  const { authState, nextPath, loginPath } = await consumeGoogleAuth();
 
   if (denied) {
-    return NextResponse.redirect(loginErrorUrl(request, denied));
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, denied, nextPath));
   }
 
   if (!code || !state || !authState || state !== authState) {
-    return NextResponse.redirect(loginErrorUrl(request, "state"));
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, "state", nextPath));
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(loginErrorUrl(request, "config"));
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, "config", nextPath));
   }
 
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -60,13 +74,13 @@ export async function GET(request: NextRequest) {
   });
 
   if (!tokenResponse.ok) {
-    return NextResponse.redirect(loginErrorUrl(request, "oauth_callback"));
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, "oauth_callback", nextPath));
   }
 
   const tokenData = (await tokenResponse.json()) as GoogleTokenResponse;
 
   if (!tokenData.access_token || tokenData.error) {
-    return NextResponse.redirect(loginErrorUrl(request, "oauth_callback"));
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, "oauth_callback", nextPath));
   }
 
   const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
@@ -77,23 +91,38 @@ export async function GET(request: NextRequest) {
   });
 
   if (!profileResponse.ok) {
-    return NextResponse.redirect(loginErrorUrl(request, "profile"));
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, "profile", nextPath));
   }
 
   const profile = (await profileResponse.json()) as GoogleUserProfile;
 
   if (!profile.sub || !profile.email || !profile.name) {
-    return NextResponse.redirect(loginErrorUrl(request, "profile"));
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, "profile", nextPath));
   }
 
-  await saveCustomerSession({
-    googleId: profile.sub,
-    email: profile.email,
-    fullName: profile.name,
-    firstName: profile.given_name ?? profile.name,
-    lastName: profile.family_name ?? "",
-    picture: profile.picture
-  });
+  try {
+    const resolvedUser = await resolveGoogleUser({
+      sub: profile.sub,
+      email: profile.email,
+      name: profile.name,
+      givenName: profile.given_name,
+      familyName: profile.family_name,
+      picture: profile.picture
+    });
 
-  return NextResponse.redirect(new URL(nextPath ?? "/kiosk", request.url));
+    if (requiresEmployeeAccess(nextPath)) {
+      if (!resolvedUser.employee) {
+        return NextResponse.redirect(loginErrorUrl(request, loginPath, "employee_access", nextPath));
+      }
+
+      await saveEmployeeSession(resolvedUser.employee);
+      return NextResponse.redirect(new URL(nextPath ?? "/pos", request.url));
+    }
+
+    await saveCustomerSession(resolvedUser.customer);
+    return NextResponse.redirect(new URL(nextPath ?? "/kiosk", request.url));
+  } catch (error) {
+    console.error("Google sign-in failed after profile lookup:", error);
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, "authorization", nextPath));
+  }
 }

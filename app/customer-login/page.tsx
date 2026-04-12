@@ -19,6 +19,7 @@ const errorMessages: Record<string, string> = {
   access_denied: "Google sign-in was canceled.",
   oauth_callback: "Google sign-in could not be completed.",
   profile: "We signed you in with Google, but could not read your profile.",
+  authorization: "We could not save or look up that Google account.",
   unknown: "Something went wrong during sign-in. Please try again."
 };
 
@@ -32,7 +33,7 @@ export default async function CustomerLoginPage({ searchParams }: CustomerLoginP
     redirect(nextPath);
   }
 
-  const googleHref = `/api/auth/google/start?next=${encodeURIComponent(nextPath)}`;
+  const googleHref = `/api/auth/google/start?next=${encodeURIComponent(nextPath)}&login=${encodeURIComponent("/customer-login")}`;
 
   return (
     <>
@@ -58,7 +59,7 @@ export default async function CustomerLoginPage({ searchParams }: CustomerLoginP
               Back to Portal
             </Link>
             <p className="text-sm text-stone-600">
-              After sign-in, customers are redirected to the current kiosk under-construction page.
+              After sign-in, we create or refresh a database record for this email and use that to decide access.
             </p>
             {errorMessage ? <p className="text-sm text-danger">{errorMessage}</p> : null}
           </CardContent>
