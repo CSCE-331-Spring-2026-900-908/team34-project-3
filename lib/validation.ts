@@ -35,7 +35,8 @@ export const orderItemInputSchema = z.object({
 });
 
 export const completeOrderSchema = z.object({
-  items: z.array(orderItemInputSchema).min(1, "Add at least one item.")
+  items: z.array(orderItemInputSchema).min(1, "Add at least one item."),
+  customerGoogleId: z.string().optional()
 });
 
 export const employeeFormSchema = z.object({
@@ -45,6 +46,17 @@ export const employeeFormSchema = z.object({
 });
 
 export const employeeMutationSchema = employeeFormSchema;
+
+export const menuItemMutationSchema = z.object({
+  name: z.string().trim().min(1, "Name cannot be empty."),
+  rawCost: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((value) => !Number.isNaN(Number(value)), "Enter a valid cost.")
+    .refine((value) => Number(value) >= 0, "Cost cannot be negative."),
+  ingredients: z.record(z.string(), z.number().int().min(0))
+});
 
 export const ingredientFormSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty."),
