@@ -20,6 +20,11 @@ type ChartBar = {
   totalSales: number;
 };
 
+type ChartTick = {
+  label: string;
+  value: number;
+};
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -30,10 +35,8 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-function formatHour(hour: number) {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric"
-  }).format(new Date(2000, 0, 1, hour));
+function formatChartHour(hour: number) {
+  return `${String(hour).padStart(2, "0")}:00`;
 }
 
 function buildChartBars(report: XReportData): ChartBar[] {
@@ -58,6 +61,42 @@ function buildChartBars(report: XReportData): ChartBar[] {
     return {
       hour,
       totalSales: salesByHour.get(hour) ?? 0
+    };
+  });
+}
+
+function getNiceChartMax(value: number) {
+  if (value <= 0) {
+    return 10;
+  }
+
+  const roughStep = value / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+
+  let step = magnitude;
+
+  if (normalized > 5) {
+    step = 10 * magnitude;
+  } else if (normalized > 2) {
+    step = 5 * magnitude;
+  } else if (normalized > 1) {
+    step = 2 * magnitude;
+  }
+
+  return Math.ceil(value / step) * step;
+}
+
+function buildChartTicks(maxValue: number): ChartTick[] {
+  const tickCount = 5;
+  const step = maxValue / tickCount;
+
+  return Array.from({ length: tickCount + 1 }, (_, index) => {
+    const value = maxValue - step * index;
+
+    return {
+      value,
+      label: value.toFixed(step >= 10 ? 0 : 2).replace(/\.00$/, "")
     };
   });
 }
@@ -91,6 +130,8 @@ export function XReportClient({ report }: Props) {
   const [isPending, startTransition] = useTransition();
   const chartBars = buildChartBars(report);
   const maxSales = Math.max(...chartBars.map((row) => row.totalSales), 1);
+  const chartMax = getNiceChartMax(maxSales);
+  const chartTicks = buildChartTicks(chartMax);
   const reportStartedAt = report.lastZReportGeneratedAt ?? report.windowStartedAt;
 
   function handleRefresh() {
@@ -162,28 +203,126 @@ export function XReportClient({ report }: Props) {
                 No sales have been recorded yet for this reporting window.
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
-                {chartBars.map((row) => {
-                  const barHeight = row.totalSales > 0 ? Math.max((row.totalSales / maxSales) * 100, 10) : 6;
+              <div className="rounded-[1.75rem] border border-border bg-[linear-gradient(180deg,_rgba(249,248,246,0.96),_rgba(239,235,229,0.72))] p-3 sm:p-5">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[640px]">
+                    <svg
+                      viewBox="0 0 960 360"
+                      role="img"
+                      aria-label="Hourly sales bar chart"
+                      className="h-auto w-full"
+                    >
+                      {(() => {
+                        const marginLeft = 58;
+                        const marginTop = 14;
+                        const marginRight = 18;
+                        const marginBottom = 42;
+                        const plotWidth = 960 - marginLeft - marginRight;
+                        const plotHeight = 360 - marginTop - marginBottom;
+                        const columnWidth = plotWidth / chartBars.length;
+                        const barWidth = Math.max(Math.min(columnWidth * 0.66, 44), 14);
 
-                  return (
-                    <div key={row.hour} className="space-y-3">
-                      <div className="flex h-44 items-end rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-3">
-                        <div
-                          className="w-full rounded-[1rem] bg-[linear-gradient(180deg,_rgba(41,37,36,0.95),_rgba(120,113,108,0.82))]"
-                          style={{ height: `${barHeight}%` }}
-                          title={`${formatHour(row.hour)}: ${formatCurrency(row.totalSales)}`}
-                        />
-                      </div>
-                      <div className="space-y-1 text-center">
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-stone-500">
-                          {formatHour(row.hour)}
-                        </p>
-                        <p className="text-xs text-stone-600">{formatCurrency(row.totalSales)}</p>
-                      </div>
+                        return (
+                          <>
+                            {chartTicks.map((tick) => {
+                              const y = marginTop + plotHeight - (tick.value / chartMax) * plotHeight;
+
+                              return (
+                                <g key={tick.value}>
+                                  <line
+                                    x1={marginLeft}
+                                    y1={y}
+                                    x2={marginLeft + plotWidth}
+                                    y2={y}
+                                    stroke="#d6d3d1"
+                                    strokeDasharray="6 6"
+                                  />
+                                  <text
+                                    x={marginLeft - 12}
+                                    y={y + 4}
+                                    textAnchor="end"
+                                    fontSize="12"
+                                    fill="#78716c"
+                                  >
+                                    {tick.label}
+                                  </text>
+                                </g>
+                              );
+                            })}
+
+                            {chartBars.map((row, index) => {
+                              const x = marginLeft + columnWidth * index + (columnWidth - barWidth) / 2;
+                              const barHeight = chartMax === 0 ? 0 : (row.totalSales / chartMax) * plotHeight;
+                              const y = marginTop + plotHeight - barHeight;
+                              const labelX = marginLeft + columnWidth * index + columnWidth / 2;
+
+                              return (
+                                <g key={row.hour}>
+                                  <line
+                                    x1={labelX}
+                                    y1={marginTop}
+                                    x2={labelX}
+                                    y2={marginTop + plotHeight}
+                                    stroke="#e7e5e4"
+                                    strokeDasharray="4 8"
+                                  />
+                                  <rect
+                                    x={x}
+                                    y={y}
+                                    width={barWidth}
+                                    height={row.totalSales === 0 ? 0 : Math.max(barHeight, 2)}
+                                    rx="4"
+                                    fill="#171717"
+                                  >
+                                    <title>{`${formatChartHour(row.hour)}: ${formatCurrency(row.totalSales)}`}</title>
+                                  </rect>
+                                  <text
+                                    x={labelX}
+                                    y={marginTop + plotHeight + 24}
+                                    textAnchor="middle"
+                                    fontSize="12"
+                                    fill="#57534e"
+                                  >
+                                    {formatChartHour(row.hour)}
+                                  </text>
+                                </g>
+                              );
+                            })}
+
+                            <line
+                              x1={marginLeft}
+                              y1={marginTop}
+                              x2={marginLeft}
+                              y2={marginTop + plotHeight}
+                              stroke="#78716c"
+                              strokeWidth="1.5"
+                            />
+                            <line
+                              x1={marginLeft}
+                              y1={marginTop + plotHeight}
+                              x2={marginLeft + plotWidth}
+                              y2={marginTop + plotHeight}
+                              stroke="#78716c"
+                              strokeWidth="1.5"
+                            />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {chartBars.map((row) => (
+                    <div
+                      key={row.hour}
+                      className="flex items-center justify-between rounded-2xl border border-white/80 bg-white/70 px-3 py-2 text-xs"
+                    >
+                      <span className="font-semibold text-stone-600">{formatChartHour(row.hour)}</span>
+                      <span className="text-stone-700">{formatCurrency(row.totalSales)}</span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>
