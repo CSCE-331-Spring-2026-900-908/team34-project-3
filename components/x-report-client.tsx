@@ -5,7 +5,6 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3, Clock3, ReceiptText, RefreshCw, TrendingUp } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { XReportData } from "@/lib/db/reports";
@@ -133,6 +132,10 @@ export function XReportClient({ report }: Props) {
   const chartMax = getNiceChartMax(maxSales);
   const chartTicks = buildChartTicks(chartMax);
   const reportStartedAt = report.lastZReportGeneratedAt ?? report.windowStartedAt;
+  const reportWindowSummary =
+    report.cutoffSource === "last-z-report"
+      ? `Reporting window started ${formatDateTime(reportStartedAt)} after the last Z report.`
+      : `Reporting window started ${formatDateTime(reportStartedAt)} at the beginning of the current business day.`;
 
   function handleRefresh() {
     startTransition(() => {
@@ -142,18 +145,9 @@ export function XReportClient({ report }: Props) {
 
   return (
     <div className="grid gap-6">
-      <Card className="overflow-hidden border-stone-900/10 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.96),_rgba(240,236,230,0.92)_45%,_rgba(230,223,214,0.85)_100%)]">
+      <Card>
         <CardContent className="flex flex-col gap-5 p-6 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="border-stone-300 bg-white/80 text-stone-700">
-                {report.cutoffSource === "last-z-report" ? "Since Last Z Report" : "Since Start Of Day"}
-              </Badge>
-              <Badge className="border-stone-300 bg-white/70 text-stone-600">
-                Window opened {formatDateTime(reportStartedAt)}
-              </Badge>
-            </div>
-
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight text-foreground">Current shift snapshot</h2>
               <p className="max-w-2xl text-sm leading-6 text-stone-600">
@@ -162,10 +156,12 @@ export function XReportClient({ report }: Props) {
                   : "No Z report has been finalized yet, so this view is using the current business day as its reporting window."}
               </p>
             </div>
+
+            <p className="text-sm text-stone-500">{reportWindowSummary}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" onClick={handleRefresh} disabled={isPending} className="gap-2 bg-white/80">
+            <Button variant="outline" onClick={handleRefresh} disabled={isPending} className="gap-2">
               <RefreshCw className={cn("h-4 w-4", isPending && "animate-spin")} />
               Refresh
             </Button>
@@ -203,7 +199,7 @@ export function XReportClient({ report }: Props) {
                 No sales have been recorded yet for this reporting window.
               </div>
             ) : (
-              <div className="rounded-[1.75rem] border border-border bg-[linear-gradient(180deg,_rgba(249,248,246,0.96),_rgba(239,235,229,0.72))] p-3 sm:p-5">
+              <div className="rounded-[1.75rem] border border-border bg-[rgb(var(--surface-alt))] p-3 sm:p-5">
                 <div className="overflow-x-auto">
                   <div className="min-w-[640px]">
                     <svg

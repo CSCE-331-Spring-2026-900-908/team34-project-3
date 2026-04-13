@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock3,
   FileClock,
-  History,
   ReceiptText,
   RefreshCw,
   ShieldAlert,
@@ -16,7 +15,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ZReportData, ZReportHistoryEntry } from "@/lib/db/reports";
@@ -76,10 +74,8 @@ function HistoryEntryCard({ entry }: { entry: ZReportHistoryEntry }) {
         <div className="space-y-1">
           <p className="font-medium text-foreground">{formatBusinessDate(entry.businessDate)}</p>
           <p className="text-sm text-stone-600">Generated {formatDateTime(entry.generatedAt)}</p>
+          <p className="text-sm text-stone-500">{entry.generatedByEmployeeName ?? "Manager generated"}</p>
         </div>
-        <Badge className="border-stone-300 bg-white text-stone-600">
-          {entry.generatedByEmployeeName ?? "Manager generated"}
-        </Badge>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -106,6 +102,10 @@ export function ZReportClient({ report }: Props) {
   const [isRefreshing, startRefresh] = useTransition();
   const latestGenerated = report.latestGeneratedReport;
   const reportWindowStartedAt = report.preview.lastZReportGeneratedAt ?? report.preview.windowStartedAt;
+  const headerSummary = `${formatBusinessDate(report.businessDate)} closeout. Reporting window started ${formatDateTime(reportWindowStartedAt)}.`;
+  const headerStatus = report.canGenerate
+    ? "Today has not been closed yet, so the Z report can still be generated."
+    : "Today has already been closed, so another Z report cannot be generated right now.";
 
   function handleRefresh() {
     startRefresh(() => {
@@ -142,26 +142,9 @@ export function ZReportClient({ report }: Props) {
 
   return (
     <div className="grid gap-6">
-      <Card className="overflow-hidden border-stone-900/10 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.98),_rgba(237,241,236,0.92)_44%,_rgba(218,225,216,0.84)_100%)]">
+      <Card>
         <CardContent className="flex flex-col gap-5 p-6 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                className={cn(
-                  "bg-white/80",
-                  report.canGenerate ? "border-emerald-300 text-emerald-700" : "border-amber-300 text-amber-700"
-                )}
-              >
-                {report.canGenerate ? "Ready To Close" : "Already Closed Today"}
-              </Badge>
-              <Badge className="border-stone-300 bg-white/70 text-stone-600">
-                Business date {formatBusinessDate(report.businessDate)}
-              </Badge>
-              <Badge className="border-stone-300 bg-white/70 text-stone-600">
-                Window started {formatDateTime(reportWindowStartedAt)}
-              </Badge>
-            </div>
-
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight text-foreground">Daily closeout control</h2>
               <p className="max-w-2xl text-sm leading-6 text-stone-600">
@@ -170,17 +153,19 @@ export function ZReportClient({ report }: Props) {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-sm text-stone-600">
-              <span>
+            <div className="space-y-1 text-sm text-stone-500">
+              <p>{headerSummary}</p>
+              <p>{headerStatus}</p>
+              <p>
                 {latestGenerated
                   ? `Last generated ${formatDateTime(latestGenerated.generatedAt)}`
                   : "No previous Z report has been recorded yet."}
-              </span>
+              </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing} className="gap-2 bg-white/80">
+            <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing} className="gap-2">
               <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
               Refresh
             </Button>
@@ -305,10 +290,9 @@ export function ZReportClient({ report }: Props) {
             <CardTitle>Previous Z Reports</CardTitle>
             <CardDescription>Historical closeout snapshots in reverse chronological order.</CardDescription>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[rgb(var(--surface-alt))] px-3 py-1.5 text-xs font-medium text-stone-600">
-            <History className="h-3.5 w-3.5" />
+          <p className="text-sm text-stone-500">
             {report.history.length} recorded report{report.history.length === 1 ? "" : "s"}
-          </div>
+          </p>
         </CardHeader>
         <CardContent>
           {report.history.length === 0 ? (
