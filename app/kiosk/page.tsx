@@ -2,9 +2,11 @@ import { Button } from "@/components/ui/button";
 import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCustomerPage } from "@/lib/auth";
+import { getOrCreateRewards } from "@/lib/db/rewards";
 
 export default async function KioskPage() {
   const customer = await requireCustomerPage();
+  const rewards = await getOrCreateRewards(customer.googleId, customer.email, customer.fullName);
 
   return (
     <>
@@ -20,6 +22,13 @@ export default async function KioskPage() {
             <p className="text-sm text-stone-600">
               Signed in as <span className="font-medium text-foreground">{customer.fullName}</span> ({customer.email})
             </p>
+
+            <div className="rounded-xl border border-border bg-[rgb(var(--surface-alt))] p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-stone-500">Reward Points</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight">{rewards.points.toLocaleString()}</p>
+              <p className="mt-1 text-sm text-stone-500">Earn 1 point for every 10 cents spent.</p>
+            </div>
+
             <p className="text-sm text-stone-600">
               UNDER CONSTRUCTION...
             </p>

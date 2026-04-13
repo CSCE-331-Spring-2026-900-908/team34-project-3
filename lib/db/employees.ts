@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getEmployeeGoogleAuthMap, saveEmployeeGoogleAuthLink } from "@/lib/db/google-auth";
 import type { EmployeeRecord } from "@/lib/types";
 
 function mapEmployee(record: {
@@ -6,12 +7,16 @@ function mapEmployee(record: {
   first_name: string;
   last_name: string;
   is_manager: boolean;
+  email: string | null;
+  has_google_account: boolean;
 }): EmployeeRecord {
   return {
     employeeId: record.employee_id,
     firstName: record.first_name,
     lastName: record.last_name,
-    isManager: record.is_manager
+    email: record.email,
+    isManager: record.is_manager,
+    hasGoogleAccount: record.has_google_account
   };
 }
 
@@ -22,20 +27,43 @@ export async function getEmployees() {
     }
   });
 
-  return employees.map(mapEmployee);
+  const authMap = await getEmployeeGoogleAuthMap();
+
+  return employees.map((record) =>
+    mapEmployee({
+      ...record,
+      email: authMap.get(record.employee_id)?.email ?? null,
+      has_google_account: !!authMap.get(record.employee_id)?.googleId
+    })
+  );
 }
 
-export async function addEmployee(firstName: string, lastName: string, isManager: boolean) {
-  await prisma.$executeRaw`
+export async function addEmployee(firstName: string, lastName: string, email: string, isManager: boolean) {
+  const rows = await prisma.$queryRaw<Array<{ employee_id: number }>>`
     INSERT INTO employee (first_name, last_name, is_manager)
     VALUES (${firstName}, ${lastName}, ${isManager})
+    RETURNING employee_id
   `;
+
+  const employeeId = rows[0]?.employee_id;
+
+  if (!employeeId) {
+    throw new Error("Failed to create employee.");
+  }
+
+  await saveEmployeeGoogleAuthLink({
+    employeeId,
+    email,
+    firstName,
+    lastName
+  });
 }
 
 export async function saveEmployee(
   employeeId: number,
   firstName: string,
   lastName: string,
+  email: string,
   isManager: boolean
 ) {
   await prisma.employee.update({
@@ -47,6 +75,13 @@ export async function saveEmployee(
       last_name: lastName,
       is_manager: isManager
     }
+  });
+
+  await saveEmployeeGoogleAuthLink({
+    employeeId,
+    email,
+    firstName,
+    lastName
   });
 }
 

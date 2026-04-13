@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import type { OrderItemInput } from "@/lib/types";
+import { addRewardPoints } from "@/lib/db/rewards";
 
 function toLegacyAddonColumns(item: OrderItemInput) {
   const normalizedNames = item.ingredientChoices.map((choice) => ({
@@ -30,8 +31,8 @@ function computeItemTotal(baseCost: number, item: OrderItemInput) {
   return (baseCost + ingredientCost) * item.quantity;
 }
 
-export async function completeCurrentOrder(employeeId: number, items: OrderItemInput[]) {
-  await prisma.$transaction(async (tx) => {
+export async function completeCurrentOrder(employeeId: number, items: OrderItemInput[], customerGoogleId?: string) {
+  const orderTotal = await prisma.$transaction(async (tx) => {
     const order = await tx.orders.create({
       data: {
         employee_id: employeeId,
@@ -112,5 +113,14 @@ export async function completeCurrentOrder(employeeId: number, items: OrderItemI
         cost: new Prisma.Decimal(total)
       }
     });
+
+    return total;
   });
+
+  if (customerGoogleId) {
+    const pointsEarned = Math.floor(orderTotal * 10);
+    if (pointsEarned > 0) {
+      await addRewardPoints(customerGoogleId, pointsEarned);
+    }
+  }
 }
