@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Minus, Plus } from "lucide-react";
+import { useRef, useState } from "react";
+import { Minus, Plus, ImageUp } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,10 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
   const [ingredientQuantities, setIngredientQuantities] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageTimestamp, setImageTimestamp] = useState(() => Date.now());
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   function selectItem(item: MenuItemRecord) {
     setSelectedItem(item);
@@ -39,6 +43,8 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
     setName("");
     setRawCost("");
     setIngredientQuantities({});
+    setPendingImageFile(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
   }
 
   function updateIngredient(id: number, delta: number) {
@@ -52,6 +58,58 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
 
       return { ...current, [id]: next };
     });
+  }
+
+  async function uploadImageForItem(file: File, itemId: number): Promise<boolean> {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    const response = await fetch(`/api/menu-items/${itemId}/image`, {
+      method: "PUT",
+      body: formData
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      toast.error(payload?.error ?? "Failed to upload image.");
+      return false;
+    }
+
+    return true;
+  }
+
+  function handleImageSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("File must be an image.");
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be 2 MB or smaller.");
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
+
+    if (selectedItem) {
+      // Editing an existing item — upload immediately
+      setUploadingImage(true);
+      void uploadImageForItem(file, selectedItem.id).then((ok) => {
+        setUploadingImage(false);
+        if (imageInputRef.current) imageInputRef.current.value = "";
+        if (ok) {
+          setImageTimestamp(Date.now());
+          toast.success("Image updated.");
+        }
+      });
+    } else {
+      // New item — hold the file until after the item is created
+      setPendingImageFile(file);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -95,6 +153,14 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       toast.error(payload?.error ?? "Failed to save menu item.");
       return;
+    }
+
+    // If a new item was created and an image was staged, upload it now
+    if (!selectedItem && pendingImageFile) {
+      const payload = (await response.json().catch(() => null)) as { id?: number } | null;
+      if (payload?.id) {
+        await uploadImageForItem(pendingImageFile, payload.id);
+      }
     }
 
     toast.success(selectedItem ? "Menu item updated." : "Menu item created.");
@@ -196,6 +262,40 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
                   onChange={(event) => setRawCost(event.target.value)}
                   placeholder="0.00"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Image</Label>
+                <div className="flex items-start gap-4">
+                  {selectedItem ? (
+                    <img
+                      src={`${selectedItem.imageUrl}?v=${imageTimestamp}`}
+                      alt={selectedItem.name}
+                      className="h-20 w-20 rounded-lg border border-border object-cover bg-stone-100"
+                    />
+                  ) : null}
+                  <div className="flex flex-col gap-2">
+                    <label
+                      htmlFor="itemImage"
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-stone-50"
+                    >
+                      <ImageUp className="h-4 w-4" />
+                      {uploadingImage ? "Uploading..." : pendingImageFile ? pendingImageFile.name : "Choose Image"}
+                    </label>
+                    <input
+                      ref={imageInputRef}
+                      id="itemImage"
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      disabled={uploadingImage}
+                      onChange={handleImageSelected}
+                    />
+                    <p className="text-xs text-stone-500">
+                      {selectedItem ? "Max 2 MB. Replaces current image." : "Max 2 MB. Uploaded when item is created."}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-3">
