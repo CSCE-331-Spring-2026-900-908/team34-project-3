@@ -3,10 +3,10 @@
 import type { ReactNode } from "react";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Clock3, ReceiptText, RefreshCw, TrendingUp } from "lucide-react";
+import { Clock3, ReceiptText, RefreshCw, TrendingUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { XReportData } from "@/lib/db/reports";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -133,9 +133,7 @@ export function XReportClient({ report }: Props) {
   const chartTicks = buildChartTicks(chartMax);
   const reportStartedAt = report.lastZReportGeneratedAt ?? report.windowStartedAt;
   const reportWindowSummary =
-    report.cutoffSource === "last-z-report"
-      ? `Reporting window started ${formatDateTime(reportStartedAt)} after the last Z report.`
-      : `Reporting window started ${formatDateTime(reportStartedAt)} at the beginning of the current business day.`;
+    `Since ${formatDateTime(reportStartedAt)}`;
 
   function handleRefresh() {
     startTransition(() => {
@@ -148,15 +146,7 @@ export function XReportClient({ report }: Props) {
       <Card>
         <CardContent className="flex flex-col gap-5 p-6 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-4">
-            <div className="space-y-2">
-              <h2 className="text-2xl font-semibold tracking-tight text-foreground">Current shift snapshot</h2>
-              <p className="max-w-2xl text-sm leading-6 text-stone-600">
-                {report.cutoffSource === "last-z-report"
-                  ? "Sales and item totals reset when a Z report is generated, so this view shows everything recorded since that cutoff."
-                  : "No Z report has been finalized yet, so this view is using the current business day as its reporting window."}
-              </p>
-            </div>
-
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">Current shift snapshot</h2>
             <p className="text-sm text-stone-500">{reportWindowSummary}</p>
           </div>
 
@@ -191,7 +181,6 @@ export function XReportClient({ report }: Props) {
         <Card>
           <CardHeader>
             <CardTitle>Hourly Sales</CardTitle>
-            <CardDescription>Revenue grouped by order hour for the active reporting window.</CardDescription>
           </CardHeader>
           <CardContent>
             {chartBars.length === 0 ? (
@@ -327,7 +316,6 @@ export function XReportClient({ report }: Props) {
         <Card>
           <CardHeader>
             <CardTitle>Top Selling Items</CardTitle>
-            <CardDescription>Highest-revenue items since the current report window began.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {report.topSellingItems.length === 0 ? (
@@ -356,15 +344,8 @@ export function XReportClient({ report }: Props) {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <CardTitle>Sales By Item</CardTitle>
-            <CardDescription>Full item-level sales breakdown for the active report window.</CardDescription>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[rgb(var(--surface-alt))] px-3 py-1.5 text-xs font-medium text-stone-600">
-            <BarChart3 className="h-3.5 w-3.5" />
-            {report.salesByItem.length} tracked item{report.salesByItem.length === 1 ? "" : "s"}
-          </div>
+        <CardHeader>
+          <CardTitle>Sales By Item</CardTitle>
         </CardHeader>
         <CardContent>
           {report.salesByItem.length === 0 ? (

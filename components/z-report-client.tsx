@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ZReportData, ZReportHistoryEntry } from "@/lib/db/reports";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -101,11 +101,6 @@ export function ZReportClient({ report }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
   const latestGenerated = report.latestGeneratedReport;
-  const reportWindowStartedAt = report.preview.lastZReportGeneratedAt ?? report.preview.windowStartedAt;
-  const headerSummary = `${formatBusinessDate(report.businessDate)} closeout. Reporting window started ${formatDateTime(reportWindowStartedAt)}.`;
-  const headerStatus = report.canGenerate
-    ? "Today has not been closed yet, so the Z report can still be generated."
-    : "Today has already been closed, so another Z report cannot be generated right now.";
 
   function handleRefresh() {
     startRefresh(() => {
@@ -145,23 +140,7 @@ export function ZReportClient({ report }: Props) {
       <Card>
         <CardContent className="flex flex-col gap-5 p-6 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-4">
-            <div className="space-y-2">
-              <h2 className="text-2xl font-semibold tracking-tight text-foreground">Daily closeout control</h2>
-              <p className="max-w-2xl text-sm leading-6 text-stone-600">
-                Review the current shift totals, confirm the closeout snapshot, and lock the reporting window by
-                generating the Z report. Once generated, the next X report begins from that new cutoff.
-              </p>
-            </div>
-
-            <div className="space-y-1 text-sm text-stone-500">
-              <p>{headerSummary}</p>
-              <p>{headerStatus}</p>
-              <p>
-                {latestGenerated
-                  ? `Last generated ${formatDateTime(latestGenerated.generatedAt)}`
-                  : "No previous Z report has been recorded yet."}
-              </p>
-            </div>
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">Daily closeout</h2>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -204,33 +183,30 @@ export function ZReportClient({ report }: Props) {
         <Card>
           <CardHeader>
             <CardTitle>Current Closeout Preview</CardTitle>
-            <CardDescription>These are the totals that will be written if you generate the Z report now.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Business Date</p>
               <p className="mt-2 text-lg font-semibold text-foreground">{formatBusinessDate(report.preview.businessDate)}</p>
-              <p className="mt-1 text-sm text-stone-500">The daily closeout this Z report will lock.</p>
             </div>
 
             <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Report Window</p>
-              <p className="mt-2 text-lg font-semibold text-foreground">{formatDateTime(reportWindowStartedAt)}</p>
-              <p className="mt-1 text-sm text-stone-500">Orders recorded since this cutoff are included.</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">
+                {formatDateTime(report.preview.lastZReportGeneratedAt ?? report.preview.windowStartedAt)}
+              </p>
             </div>
 
             <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Sales Total</p>
               <p className="mt-2 text-lg font-semibold text-foreground">{formatCurrency(report.preview.totalSales)}</p>
-              <p className="mt-1 text-sm text-stone-500">Gross revenue that will be captured in today&apos;s closeout.</p>
             </div>
 
             <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Orders And Average</p>
               <p className="mt-2 text-lg font-semibold text-foreground">
-                {report.preview.orderCount} orders · {formatCurrency(report.preview.averageOrderValue)}
+                {report.preview.orderCount} orders | {formatCurrency(report.preview.averageOrderValue)}
               </p>
-              <p className="mt-1 text-sm text-stone-500">Count of completed orders and their average ticket size.</p>
             </div>
           </CardContent>
         </Card>
@@ -238,7 +214,6 @@ export function ZReportClient({ report }: Props) {
         <Card>
           <CardHeader>
             <CardTitle>Closeout Status</CardTitle>
-            <CardDescription>Track whether today&apos;s Z report is still pending or already locked.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div
@@ -259,8 +234,8 @@ export function ZReportClient({ report }: Props) {
                   </p>
                   <p className="text-sm">
                     {report.canGenerate
-                      ? "No Z report exists for the current business date, so the closeout can be finalized now."
-                      : "A Z report for this business date already exists, so the reporting window is locked until tomorrow."}
+                      ? "No Z report exists for this business date."
+                      : "A Z report already exists for this business date."}
                   </p>
                 </div>
               </div>
@@ -286,12 +261,9 @@ export function ZReportClient({ report }: Props) {
 
       <Card>
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <CardTitle>Previous Z Reports</CardTitle>
-            <CardDescription>Historical closeout snapshots in reverse chronological order.</CardDescription>
-          </div>
+          <CardTitle>Previous Z Reports</CardTitle>
           <p className="text-sm text-stone-500">
-            {report.history.length} recorded report{report.history.length === 1 ? "" : "s"}
+            {report.history.length} report{report.history.length === 1 ? "" : "s"}
           </p>
         </CardHeader>
         <CardContent>
