@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CustomerWeatherWidget } from "@/components/customer-weather-widget";
 import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
 // We now import SessionCustomer instead of SessionEmployee
 import type { IngredientRecord, MenuItemRecord, SessionCustomer } from "@/lib/types";
@@ -323,12 +324,15 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
                             <CupSoda className="h-7 w-7" />
                         </div>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0">
                             <p className="text-sm font-bold uppercase tracking-widest text-stone-500">Welcome</p>
                             <h1 className="text-2xl font-semibold tracking-tight">{customer.fullName}</h1>
                             <p className="text-sm text-stone-500">Ready to order? Select an item below.</p>
                         </div>
-                        <Button variant="outline" onClick={logout} className="gap-2">
+                        <div className="shrink-0">
+                            <CustomerWeatherWidget />
+                        </div>
+                        <Button variant="outline" onClick={logout} className="ml-auto gap-2">
                             <LogOut className="h-4 w-4" />
                             Sign Out
                         </Button>
