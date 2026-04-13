@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await completeCurrentOrder(employee.employeeId, parsed.data.items);
+    await completeCurrentOrder(employee.employeeId, parsed.data.items, parsed.data.customerGoogleId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to complete order.";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { forbiddenJson, unauthorizedJson } from "@/lib/auth";
-import { deleteEmployee, saveEmployee } from "@/lib/db/employees";
+import { deleteMenuItem, updateMenuItem } from "@/lib/db/menu-items";
 import { getSessionEmployee } from "@/lib/session";
-import { employeeMutationSchema } from "@/lib/validation";
+import { menuItemMutationSchema } from "@/lib/validation";
 
 export async function PUT(
   request: Request,
@@ -20,18 +20,24 @@ export async function PUT(
   }
 
   const body = await request.json().catch(() => null);
-  const parsed = employeeMutationSchema.safeParse(body);
+  const parsed = menuItemMutationSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid employee." }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid menu item." }, { status: 400 });
   }
 
-  await saveEmployee(
+  const ingredientMap: Record<number, number> = {};
+  for (const [key, value] of Object.entries(parsed.data.ingredients)) {
+    if (value > 0) {
+      ingredientMap[Number(key)] = value;
+    }
+  }
+
+  await updateMenuItem(
     Number(params.id),
-    parsed.data.firstName.trim(),
-    parsed.data.lastName.trim(),
-    parsed.data.email.trim().toLowerCase(),
-    parsed.data.isManager
+    parsed.data.name.trim(),
+    Number(parsed.data.rawCost),
+    ingredientMap
   );
 
   return NextResponse.json({ ok: true });
@@ -51,13 +57,13 @@ export async function DELETE(
     return forbiddenJson();
   }
 
-  const employeeId = Number(params.id);
+  const menuItemId = Number(params.id);
 
-  if (!Number.isInteger(employeeId)) {
-    return NextResponse.json({ error: "Invalid employee." }, { status: 400 });
+  if (!Number.isInteger(menuItemId)) {
+    return NextResponse.json({ error: "Invalid menu item." }, { status: 400 });
   }
 
-  await deleteEmployee(employeeId);
+  await deleteMenuItem(menuItemId);
 
   return NextResponse.json({ ok: true });
 }

@@ -28,6 +28,15 @@ type Ingredient = {
   addCost: number;
 };
 
+type WeatherContext = {
+  locationName?: string;
+  description?: string;
+  temperatureF?: number | null;
+  feelsLikeF?: number | null;
+  humidity?: number | null;
+  windMph?: number | null;
+};
+
 type ChatAction =
   | {
       type: "none";
@@ -124,6 +133,7 @@ export async function POST(req: NextRequest) {
       cartItems?: CartItem[];
       menuItems?: MenuItem[];
       ingredients?: Ingredient[];
+      weather?: WeatherContext | null;
     };
 
     const message = body.message?.trim();
@@ -131,6 +141,7 @@ export async function POST(req: NextRequest) {
     const cartItems = Array.isArray(body.cartItems) ? body.cartItems : [];
     const menuItems = Array.isArray(body.menuItems) ? body.menuItems : [];
     const ingredients = Array.isArray(body.ingredients) ? body.ingredients : [];
+    const weather = body.weather && typeof body.weather === "object" ? body.weather : null;
 
     if (!message) {
       return NextResponse.json({ reply: "Please type a boba shop question first." }, { status: 400 });
@@ -151,6 +162,8 @@ export async function POST(req: NextRequest) {
       "If the user asks for something unrelated to a boba shop, politely refuse and redirect to menu, drink, topping, or order questions.",
       "Use the current cart and menu context when answering.",
       "When the user asks for suggestions, recommend specific drinks or add-ons from the menu and explain why they fit.",
+      "If the user asks for a generic recommendation and weather context is available, tailor the recommendation to the current weather.",
+      "On hot weather, prefer refreshing, lighter, or icy drinks first. On cooler weather, prefer richer, creamier, or comforting drinks first.",
       "If the cart already has items, suggest complementary drinks, topping tweaks, or sweetness/ice adjustments.",
       "You may help add drinks to the cart by returning an add_to_cart action only when the user clearly asks to add an item.",
       "You may help edit an existing cart drink by returning an edit_cart_item action when the user clearly asks to change a drink already in the cart.",
@@ -164,7 +177,10 @@ export async function POST(req: NextRequest) {
       'Return valid JSON with this shape: {"reply":"string","action":{"type":"none"}}, {"reply":"string","action":{"type":"add_to_cart","itemName":"string","quantity":1,"sweetness":100,"ice":2,"extras":[{"name":"Boba","quantity":1}]}} or {"reply":"string","action":{"type":"edit_cart_item","cartIndex":1,"itemName":"Taro Milk Tea","quantity":2,"sweetness":50,"ice":1,"extras":[{"name":"Boba","quantity":1}]}}.',
       `Menu items: ${buildMenuSummary(menuItems)}`,
       `Available extra ingredients: ${buildIngredientSummary(ingredients)}`,
-      `Current cart:\n${buildCartSummary(cartItems)}`
+      `Current cart:\n${buildCartSummary(cartItems)}`,
+      weather
+        ? `Current local weather: ${weather.locationName ?? "Unknown location"} | ${weather.description ?? "Unknown conditions"} | temperature ${weather.temperatureF ?? "unknown"}F | feels like ${weather.feelsLikeF ?? "unknown"}F | humidity ${weather.humidity ?? "unknown"}% | wind ${weather.windMph ?? "unknown"} mph`
+        : "Current local weather: unavailable."
     ].join("\n");
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useOrderStore } from "@/lib/stores/order-store";
@@ -10,6 +10,15 @@ type ChatbotProps = {
   cartItems: OrderItemInput[];
   ingredients: IngredientRecord[];
   menuItems: MenuItemRecord[];
+};
+
+type WeatherContext = {
+  locationName: string;
+  description: string;
+  temperatureF: number | null;
+  feelsLikeF: number | null;
+  humidity: number | null;
+  windMph: number | null;
 };
 
 type ChatAction =
@@ -50,6 +59,54 @@ export default function Chatbot({ cartItems, ingredients, menuItems }: ChatbotPr
   const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [weather, setWeather] = useState<WeatherContext | null>(null);
+
+  useEffect(() => {
+    if (!("geolocation" in navigator)) {
+      return;
+    }
+
+    let cancelled = false;
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const params = new URLSearchParams({
+            lat: String(position.coords.latitude),
+            lon: String(position.coords.longitude)
+          });
+
+          const response = await fetch(`/api/weather/current?${params.toString()}`, {
+            cache: "no-store"
+          });
+
+          const payload = (await response.json().catch(() => null)) as WeatherContext | { error?: string } | null;
+
+          if (!response.ok || !payload || typeof payload !== "object" || !("locationName" in payload)) {
+            return;
+          }
+
+          if (!cancelled) {
+            setWeather(payload as WeatherContext);
+          }
+        } catch {
+          // Weather context is optional for chat recommendations.
+        }
+      },
+      () => {
+        // Geolocation is optional for chat recommendations.
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 5 * 60 * 1000
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function buildIngredientChoices(extras: Array<{ name: string; quantity?: number }>) {
     return extras
@@ -103,7 +160,8 @@ export default function Chatbot({ cartItems, ingredients, menuItems }: ChatbotPr
           menuItems: menuItems.map((item) => ({
             name: item.name,
             cost: item.cost
-          }))
+          })),
+          weather
         })
       });
 
