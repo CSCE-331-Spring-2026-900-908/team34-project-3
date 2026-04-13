@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { BUSINESS_TIME_ZONE } from "@/lib/report-time";
 
 export type XReportHourlySales = {
   hour: number;
@@ -97,6 +98,16 @@ function toDate(value: Date | string | null | undefined) {
     return null;
   }
 
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return new Date(`${value}T00:00:00.000Z`);
+    }
+
+    if (!/(Z|[+-]\d{2}:\d{2})$/i.test(value)) {
+      return new Date(`${value.replace(" ", "T")}Z`);
+    }
+  }
+
   return value instanceof Date ? value : new Date(value);
 }
 
@@ -140,7 +151,13 @@ export async function getXReportData(): Promise<XReportData> {
   const [reportWindow] = await prisma.$queryRaw<ReportWindowRow[]>`
     SELECT
       MAX(generated_at) AS last_z_report_generated_at,
-      COALESCE(MAX(generated_at), DATE_TRUNC('day', CURRENT_TIMESTAMP)::timestamp) AS window_started_at
+      COALESCE(
+        MAX(generated_at),
+        (
+          DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE ${BUSINESS_TIME_ZONE})
+          AT TIME ZONE ${BUSINESS_TIME_ZONE}
+        ) AT TIME ZONE 'UTC'
+      ) AS window_started_at
     FROM zreporthistory
   `;
 
@@ -158,7 +175,7 @@ export async function getXReportData(): Promise<XReportData> {
     `,
     prisma.$queryRaw<HourlySalesRow[]>`
       SELECT
-        EXTRACT(HOUR FROM created_at)::int AS hour,
+        EXTRACT(HOUR FROM ((created_at AT TIME ZONE 'UTC') AT TIME ZONE ${BUSINESS_TIME_ZONE}))::int AS hour,
         COALESCE(SUM(cost), 0) AS total_sales
       FROM orders
       WHERE created_at >= ${windowStartedAt}
@@ -205,17 +222,30 @@ export async function getXReportData(): Promise<XReportData> {
 export async function getZReportData(): Promise<ZReportData> {
   const [[businessDateRow], [reportWindow], previewRows, [canGenerateRow], historyRows] = await Promise.all([
     prisma.$queryRaw<CurrentBusinessDateRow[]>`
-      SELECT CURRENT_DATE AS business_date
+      SELECT (CURRENT_TIMESTAMP AT TIME ZONE ${BUSINESS_TIME_ZONE})::date AS business_date
     `,
     prisma.$queryRaw<ReportWindowRow[]>`
       SELECT
         MAX(generated_at) AS last_z_report_generated_at,
-        COALESCE(MAX(generated_at), DATE_TRUNC('day', CURRENT_TIMESTAMP)::timestamp) AS window_started_at
+        COALESCE(
+          MAX(generated_at),
+          (
+            DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE ${BUSINESS_TIME_ZONE})
+            AT TIME ZONE ${BUSINESS_TIME_ZONE}
+          ) AT TIME ZONE 'UTC'
+        ) AS window_started_at
       FROM zreporthistory
     `,
     prisma.$queryRaw<ReportSummaryRow[]>`
       WITH current_window AS (
-        SELECT COALESCE(MAX(generated_at), DATE_TRUNC('day', CURRENT_TIMESTAMP)::timestamp) AS window_started_at
+        SELECT
+          COALESCE(
+            MAX(generated_at),
+            (
+              DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE ${BUSINESS_TIME_ZONE})
+              AT TIME ZONE ${BUSINESS_TIME_ZONE}
+            ) AT TIME ZONE 'UTC'
+          ) AS window_started_at
         FROM zreporthistory
       )
       SELECT
@@ -229,7 +259,7 @@ export async function getZReportData(): Promise<ZReportData> {
       SELECT NOT EXISTS (
         SELECT 1
         FROM zreporthistory
-        WHERE business_date = CURRENT_DATE
+        WHERE business_date = (CURRENT_TIMESTAMP AT TIME ZONE ${BUSINESS_TIME_ZONE})::date
       ) AS can_generate
     `,
     prisma.$queryRaw<ZReportHistoryRow[]>`
@@ -276,7 +306,14 @@ export async function generateZReport(employeeId: number): Promise<ZReportHistor
   return prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<ZReportHistoryRow[]>`
       WITH current_window AS (
-        SELECT COALESCE(MAX(generated_at), DATE_TRUNC('day', CURRENT_TIMESTAMP)::timestamp) AS window_started_at
+        SELECT
+          COALESCE(
+            MAX(generated_at),
+            (
+              DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE ${BUSINESS_TIME_ZONE})
+              AT TIME ZONE ${BUSINESS_TIME_ZONE}
+            ) AT TIME ZONE 'UTC'
+          ) AS window_started_at
         FROM zreporthistory
       ),
       inserted AS (
@@ -289,8 +326,8 @@ export async function generateZReport(employeeId: number): Promise<ZReportHistor
           average_order_value
         )
         SELECT
-          CURRENT_DATE,
-          CURRENT_TIMESTAMP::timestamp,
+          (CURRENT_TIMESTAMP AT TIME ZONE ${BUSINESS_TIME_ZONE})::date,
+          CURRENT_TIMESTAMP AT TIME ZONE 'UTC',
           ${employeeId},
           COALESCE(SUM(o.cost), 0),
           COUNT(o.order_id)::int,
@@ -300,7 +337,7 @@ export async function generateZReport(employeeId: number): Promise<ZReportHistor
         WHERE NOT EXISTS (
           SELECT 1
           FROM zreporthistory
-          WHERE business_date = CURRENT_DATE
+          WHERE business_date = (CURRENT_TIMESTAMP AT TIME ZONE ${BUSINESS_TIME_ZONE})::date
         )
         RETURNING
           id,

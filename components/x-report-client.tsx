@@ -7,6 +7,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { XReportData } from "@/lib/db/reports";
+import { formatBusinessDateTime, getBusinessDateKey, getBusinessHour } from "@/lib/report-time";
 import { cn, formatCurrency } from "@/lib/utils";
 
 type Props = {
@@ -27,16 +28,6 @@ function formatAxisCurrency(value: number, step: number) {
   return `$${value.toFixed(step >= 10 ? 0 : 2).replace(/\.00$/, "")}`;
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
-
 function formatChartHour(hour: number) {
   return `${String(hour).padStart(2, "0")}:00`;
 }
@@ -47,18 +38,20 @@ function buildChartBars(report: XReportData): ChartBar[] {
   }
 
   const salesByHour = new Map(report.hourlySales.map((row) => [row.hour, row.totalSales]));
-  const windowStart = new Date(report.windowStartedAt);
+  const windowStart = report.windowStartedAt;
   const now = new Date();
-  const sharesCurrentDay = windowStart.toDateString() === now.toDateString();
+  const sharesCurrentDay = getBusinessDateKey(windowStart) === getBusinessDateKey(now);
 
   if (!sharesCurrentDay) {
     return report.hourlySales;
   }
 
-  const totalHours = Math.max(now.getHours() - windowStart.getHours() + 1, 1);
+  const startHour = getBusinessHour(windowStart);
+  const endHour = getBusinessHour(now);
+  const totalHours = Math.max(endHour - startHour + 1, 1);
 
   return Array.from({ length: totalHours }, (_, index) => {
-    const hour = windowStart.getHours() + index;
+    const hour = startHour + index;
 
     return {
       hour,
@@ -142,7 +135,7 @@ export function XReportClient({ report }: Props) {
           <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1">
               <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-foreground">Current Window</h2>
-              <p className="text-sm text-stone-500">Since {formatDateTime(reportStartedAt)}</p>
+              <p className="text-sm text-stone-500">Since {formatBusinessDateTime(reportStartedAt)}</p>
             </div>
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="gap-2">
               <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
@@ -225,8 +218,9 @@ export function XReportClient({ report }: Props) {
 
                             {chartBars.map((row, index) => {
                               const x = marginLeft + columnWidth * index + (columnWidth - barWidth) / 2;
-                              const barHeight = (row.totalSales / chartMax) * plotHeight;
-                              const y = marginTop + plotHeight - barHeight;
+                              const rawBarHeight = (row.totalSales / chartMax) * plotHeight;
+                              const renderedBarHeight = row.totalSales === 0 ? 0 : Math.max(rawBarHeight, 2);
+                              const y = marginTop + plotHeight - renderedBarHeight;
                               const labelX = marginLeft + columnWidth * index + columnWidth / 2;
 
                               return (
@@ -235,7 +229,7 @@ export function XReportClient({ report }: Props) {
                                     x={x}
                                     y={y}
                                     width={barWidth}
-                                    height={row.totalSales === 0 ? 0 : Math.max(barHeight, 2)}
+                                    height={renderedBarHeight}
                                     fill="#171717"
                                   >
                                     <title>{`${formatChartHour(row.hour)}: ${formatCurrency(row.totalSales)}`}</title>

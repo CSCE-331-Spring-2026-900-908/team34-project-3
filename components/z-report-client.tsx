@@ -8,30 +8,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ZReportData } from "@/lib/db/reports";
+import { formatBusinessDate, formatBusinessDateTime } from "@/lib/report-time";
 import { cn, formatCurrency } from "@/lib/utils";
 
 type Props = {
   report: ZReportData;
 };
-
-function formatBusinessDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC"
-  }).format(new Date(value));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
 
 function SummaryCell({ label, value }: { label: string; value: string | number }) {
   return (
@@ -112,7 +94,7 @@ export function ZReportClient({ report }: Props) {
               </p>
               <p className="text-sm text-stone-500">
                 {latestGenerated
-                  ? `Last generated ${formatDateTime(latestGenerated.generatedAt)}`
+                  ? `Last generated ${formatBusinessDateTime(latestGenerated.generatedAt)}`
                   : "No previous Z report recorded."}
               </p>
             </div>
@@ -131,7 +113,7 @@ export function ZReportClient({ report }: Props) {
 
           <div className="grid sm:grid-cols-5">
             <SummaryCell label="Business Date" value={formatBusinessDate(report.businessDate)} />
-            <SummaryCell label="Window Start" value={formatDateTime(reportWindowStartedAt)} />
+            <SummaryCell label="Window Start" value={formatBusinessDateTime(reportWindowStartedAt)} />
             <SummaryCell label="Total Sales" value={formatCurrency(report.preview.totalSales)} />
             <SummaryCell label="Order Count" value={report.preview.orderCount} />
             <SummaryCell label="Average Ticket" value={formatCurrency(report.preview.averageOrderValue)} />
@@ -145,7 +127,7 @@ export function ZReportClient({ report }: Props) {
             <SectionHeading title="Current Closeout Preview" />
             <dl>
               <PreviewRow label="Business Date" value={formatBusinessDate(report.preview.businessDate)} />
-              <PreviewRow label="Window Start" value={formatDateTime(reportWindowStartedAt)} />
+              <PreviewRow label="Window Start" value={formatBusinessDateTime(reportWindowStartedAt)} />
               <PreviewRow label="Total Sales" value={formatCurrency(report.preview.totalSales)} />
               <PreviewRow label="Order Count" value={report.preview.orderCount} />
               <PreviewRow label="Average Order Value" value={formatCurrency(report.preview.averageOrderValue)} />
@@ -167,7 +149,7 @@ export function ZReportClient({ report }: Props) {
                 <span className="font-medium text-stone-600">Latest Closeout</span>
                 <span className="text-foreground">
                   {latestGenerated
-                    ? `${formatBusinessDate(latestGenerated.businessDate)} at ${formatDateTime(latestGenerated.generatedAt)}`
+                    ? `${formatBusinessDate(latestGenerated.businessDate)} at ${formatBusinessDateTime(latestGenerated.generatedAt)}`
                     : "No previous Z report recorded"}
                 </span>
               </div>
@@ -204,7 +186,7 @@ export function ZReportClient({ report }: Props) {
                   {report.history.map((entry) => (
                     <tr key={entry.id}>
                       <td className="px-4 py-3 font-medium text-foreground">{formatBusinessDate(entry.businessDate)}</td>
-                      <td className="px-4 py-3 text-stone-600">{formatDateTime(entry.generatedAt)}</td>
+                      <td className="px-4 py-3 text-stone-600">{formatBusinessDateTime(entry.generatedAt)}</td>
                       <td className="px-4 py-3 text-stone-600">
                         {entry.generatedByEmployeeName ?? "Unavailable"}
                       </td>
