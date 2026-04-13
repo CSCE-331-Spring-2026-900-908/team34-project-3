@@ -122,6 +122,9 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [searchQuery, setSearchQuery] = useState("");
     const [activeCategory, setActiveCategory] = useState("All");
     const [searchKeyboardOpen, setSearchKeyboardOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<"menu" | "rewards">("menu");
+    const [rewardsPoints, setRewardsPoints] = useState(0);
+    const [pointsToRedeem, setPointsToRedeem] = useState(0);
     // ... (all other useState and useEffect hooks are identical, copy them here) ...
 
     // Start of copied block from POS //
@@ -258,7 +261,15 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }, [ingredients, selectedItem, translatorLanguage]);
     // End of copied block from POS //
 
+    useEffect(() => {
+        fetch("/api/rewards")
+            .then((r) => r.json())
+            .then((data: { points?: number }) => setRewardsPoints(data.points ?? 0))
+            .catch(() => {});
+    }, []);
+
     const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
+    const discount = Math.floor(pointsToRedeem / 100);
     const categories = useMemo(
         () => ["All", ...Array.from(new Set(menuItems.map((item) => getDrinkCategory(item.name))))],
         [menuItems]
@@ -338,7 +349,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ items })
+            body: JSON.stringify({ items, pointsToRedeem })
         });
 
         setCheckoutPending(false);
@@ -350,6 +361,13 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         }
 
         clear();
+        setPointsToRedeem(0);
+        setActiveTab("menu");
+        // Refresh points balance after checkout (earned points added, redeemed points subtracted)
+        fetch("/api/rewards")
+            .then((r) => r.json())
+            .then((data: { points?: number }) => setRewardsPoints(data.points ?? 0))
+            .catch(() => {});
         toast.success("Order completed.");
     }
     // End of copied block from POS //
@@ -387,6 +405,10 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         <div className="shrink-0">
                             <CustomerWeatherWidget />
                         </div>
+                        <div className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
+                            <Receipt className="h-4 w-4" />
+                            {rewardsPoints} pts
+                        </div>
                         <Button variant="outline" onClick={logout} className="ml-auto gap-2">
                             <LogOut className="h-4 w-4" />
                             Sign Out
@@ -397,34 +419,98 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         <Card className="shadow-sm">
                             <CardHeader>
                                 <div className="space-y-4">
-                                    <CardTitle>Menu</CardTitle>
-                                    <div className="flex flex-col gap-4">
-                                        <div className="relative max-w-md">
-                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                                            <TouchscreenInput
-                                                value={searchQuery}
-                                                onValueChange={setSearchQuery}
-                                                onKeyboardOpenChange={setSearchKeyboardOpen}
-                                                placeholder="Search for a drink"
-                                                className="pl-9"
-                                            />
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {categories.map((category) => (
-                                                <Button
-                                                    key={category}
-                                                    variant={activeCategory === category ? "default" : "outline"}
-                                                    size="sm"
-                                                    onClick={() => setActiveCategory(category)}
-                                                >
-                                                    {category}
-                                                </Button>
-                                            ))}
-                                        </div>
+                                    <div className="flex items-center gap-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab("menu")}
+                                            className={cn("text-xl font-semibold transition-colors", activeTab === "menu" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
+                                        >
+                                            Menu
+                                        </button>
+                                        <span className="text-stone-300">|</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab("rewards")}
+                                            className={cn("flex items-center gap-2 text-xl font-semibold transition-colors", activeTab === "rewards" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
+                                        >
+                                            Rewards
+                                            {rewardsPoints > 0 && (
+                                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                                    {rewardsPoints} pts
+                                                </span>
+                                            )}
+                                        </button>
                                     </div>
+                                    {activeTab === "menu" && (
+                                        <div className="flex flex-col gap-4">
+                                            <div className="relative max-w-md">
+                                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                                                <TouchscreenInput
+                                                    value={searchQuery}
+                                                    onValueChange={setSearchQuery}
+                                                    onKeyboardOpenChange={setSearchKeyboardOpen}
+                                                    placeholder="Search for a drink"
+                                                    className="pl-9"
+                                                />
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {categories.map((category) => (
+                                                    <Button
+                                                        key={category}
+                                                        variant={activeCategory === category ? "default" : "outline"}
+                                                        size="sm"
+                                                        onClick={() => setActiveCategory(category)}
+                                                    >
+                                                        {category}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </CardHeader>
                             <CardContent>
+                                {activeTab === "rewards" ? (
+                                    <div className="space-y-6">
+                                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+                                            <p className="text-sm text-blue-600">Your balance</p>
+                                            <p className="mt-1 text-4xl font-bold tracking-tight text-blue-700">{rewardsPoints} pts</p>
+                                            <p className="mt-1 text-sm text-blue-500">Worth {formatCurrency(Math.floor(rewardsPoints / 100))}</p>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <p className="font-medium">Redeem points</p>
+                                            <p className="text-sm text-stone-500">100 points = $1.00 off your order</p>
+                                            <div className="flex items-center gap-4">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setPointsToRedeem((p) => Math.max(0, p - 100))}
+                                                    disabled={pointsToRedeem === 0}
+                                                >
+                                                    <Minus className="h-4 w-4" />
+                                                </Button>
+                                                <span className="w-24 text-center text-2xl font-semibold">{pointsToRedeem} pts</span>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setPointsToRedeem((p) => Math.min(Math.floor(rewardsPoints / 100) * 100, p + 100))}
+                                                    disabled={pointsToRedeem >= Math.floor(rewardsPoints / 100) * 100}
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            {pointsToRedeem > 0 && (
+                                                <p className="text-sm font-medium text-green-700">
+                                                    {formatCurrency(discount)} discount applied to your order
+                                                </p>
+                                            )}
+                                        </div>
+                                        <Button variant="outline" className="w-full" onClick={() => setActiveTab("menu")}>
+                                            Back to Menu
+                                        </Button>
+                                    </div>
+                                ) : (
+                                <>
                                 {/* --- REPURPOSED FOR KIOSK (Menu Grid) --- */}
                                 {/* We change the grid to be more spacious and visually appealing for a kiosk. */}
                                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -458,6 +544,8 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         No drinks match your current search and category filters.
                                     </div>
                                 ) : null}
+                                </>
+                                )}
                             </CardContent>
                         </Card>
 
@@ -513,9 +601,15 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         <span>Items in order</span>
                                         <span>{items.length}</span>
                                     </div>
+                                    {discount > 0 && (
+                                        <div className="mt-2 flex items-center justify-between text-sm text-green-700">
+                                            <span>Rewards discount ({pointsToRedeem} pts)</span>
+                                            <span>−{formatCurrency(discount)}</span>
+                                        </div>
+                                    )}
                                     <div className="mt-4 flex items-end justify-between gap-4">
                                         <span className="font-medium">Total</span>
-                                        <span className="text-3xl font-semibold tracking-tight">{formatCurrency(cartTotal)}</span>
+                                        <span className="text-3xl font-semibold tracking-tight">{formatCurrency(Math.max(0, cartTotal - discount))}</span>
                                     </div>
                                 </div>
 

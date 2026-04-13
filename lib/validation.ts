@@ -36,7 +36,8 @@ export const orderItemInputSchema = z.object({
 
 export const completeOrderSchema = z.object({
   items: z.array(orderItemInputSchema).min(1, "Add at least one item."),
-  customerGoogleId: z.string().optional()
+  customerGoogleId: z.string().optional(),
+  pointsToRedeem: z.number().int().min(0).optional().default(0)
 });
 
 export const employeeFormSchema = z.object({
