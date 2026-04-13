@@ -25,6 +25,7 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
   const [rawCost, setRawCost] = useState("");
   const [ingredientQuantities, setIngredientQuantities] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function selectItem(item: MenuItemRecord) {
     setSelectedItem(item);
@@ -97,6 +98,36 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
     }
 
     toast.success(selectedItem ? "Menu item updated." : "Menu item created.");
+    clearForm();
+    router.refresh();
+  }
+
+  async function handleDelete() {
+    if (!selectedItem || deleting) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete menu item "${selectedItem.name}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+
+    const response = await fetch(`/api/menu-items/${selectedItem.id}`, {
+      method: "DELETE"
+    });
+
+    setDeleting(false);
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      toast.error(payload?.error ?? "Failed to delete menu item.");
+      return;
+    }
+
+    toast.success("Menu item deleted.");
     clearForm();
     router.refresh();
   }
@@ -227,6 +258,11 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
                 {selectedItem ? (
                   <Button type="button" variant="outline" onClick={clearForm}>
                     Cancel
+                  </Button>
+                ) : null}
+                {selectedItem ? (
+                  <Button type="button" variant="outline" onClick={() => void handleDelete()} disabled={deleting}>
+                    {deleting ? "Deleting..." : "Delete"}
                   </Button>
                 ) : null}
               </div>

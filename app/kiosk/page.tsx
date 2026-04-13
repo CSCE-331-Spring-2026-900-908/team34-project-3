@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { CustomerWeatherCard } from "@/components/customer-weather-card";
 import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCustomerPage } from "@/lib/auth";
@@ -28,6 +29,8 @@ export default async function KioskPage() {
               <p className="mt-1 text-3xl font-semibold tracking-tight">{rewards.points.toLocaleString()}</p>
               <p className="mt-1 text-sm text-stone-500">Earn 1 point for every 10 cents spent.</p>
             </div>
+
+            <CustomerWeatherCard />
 
             <p className="text-sm text-stone-600">
               UNDER CONSTRUCTION...

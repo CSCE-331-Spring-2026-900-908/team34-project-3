@@ -39,17 +39,21 @@ export async function getEmployees() {
 }
 
 export async function addEmployee(firstName: string, lastName: string, email: string, isManager: boolean) {
-  const rows = await prisma.$queryRaw<Array<{ employee_id: number }>>`
-    INSERT INTO employee (first_name, last_name, is_manager)
-    VALUES (${firstName}, ${lastName}, ${isManager})
-    RETURNING employee_id
+  const nextIdRows = await prisma.$queryRaw<Array<{ next_id: number }>>`
+    SELECT COALESCE(MAX(employee_id), 0) + 1 AS next_id
+    FROM employee
   `;
 
-  const employeeId = rows[0]?.employee_id;
+  const employeeId = nextIdRows[0]?.next_id;
 
-  if (!employeeId) {
+  if (typeof employeeId !== "number") {
     throw new Error("Failed to create employee.");
   }
+
+  await prisma.$executeRaw`
+    INSERT INTO employee (employee_id, first_name, last_name, is_manager)
+    VALUES (${employeeId}, ${firstName}, ${lastName}, ${isManager})
+  `;
 
   await saveEmployeeGoogleAuthLink({
     employeeId,
@@ -82,6 +86,21 @@ export async function saveEmployee(
     email,
     firstName,
     lastName
+  });
+}
+
+export async function deleteEmployee(employeeId: number) {
+  await prisma.$executeRaw`
+    UPDATE auth_user
+    SET employee_id = NULL,
+        updated_at = NOW()
+    WHERE employee_id = ${employeeId}
+  `;
+
+  await prisma.employee.delete({
+    where: {
+      employee_id: employeeId
+    }
   });
 }
 

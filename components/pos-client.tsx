@@ -323,7 +323,6 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                           <div className="text-lg font-semibold leading-tight">{item.name}</div>
                           <div className="mt-2 text-sm text-stone-500">{formatCurrency(item.cost)}</div>
                         </div>
-                        <div className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground">Customize</div>
                       </div>
                     </button>
                   ))}

@@ -23,6 +23,7 @@ export function EmployeeManagementClient({ employees }: Props) {
   const [email, setEmail] = useState("");
   const [isManager, setIsManager] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function selectEmployee(employee: EmployeeRecord) {
     setSelectedEmployee(employee);
@@ -77,6 +78,36 @@ export function EmployeeManagementClient({ employees }: Props) {
     }
 
     toast.success(selectedEmployee ? "Employee updated." : "Employee created.");
+    clearForm();
+    router.refresh();
+  }
+
+  async function handleDelete() {
+    if (!selectedEmployee || deleting) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete employee #${selectedEmployee.employeeId}?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+
+    const response = await fetch(`/api/employees/${selectedEmployee.employeeId}`, {
+      method: "DELETE"
+    });
+
+    setDeleting(false);
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      toast.error(payload?.error ?? "Failed to delete employee.");
+      return;
+    }
+
+    toast.success("Employee deleted.");
     clearForm();
     router.refresh();
   }
@@ -191,6 +222,11 @@ export function EmployeeManagementClient({ employees }: Props) {
                 {selectedEmployee ? (
                   <Button type="button" variant="outline" onClick={clearForm}>
                     Cancel
+                  </Button>
+                ) : null}
+                {selectedEmployee ? (
+                  <Button type="button" variant="outline" onClick={() => void handleDelete()} disabled={deleting}>
+                    {deleting ? "Deleting..." : "Delete"}
                   </Button>
                 ) : null}
               </div>

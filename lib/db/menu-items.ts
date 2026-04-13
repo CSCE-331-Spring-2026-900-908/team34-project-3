@@ -101,3 +101,19 @@ export async function updateMenuItem(
     }
   });
 }
+
+export async function deleteMenuItem(id: number): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.itemingredient.deleteMany({
+      where: { item_id: id }
+    });
+
+    await tx.orderitem.deleteMany({
+      where: { item_id: id }
+    });
+
+    await tx.item.delete({
+      where: { id }
+    });
+  });
+}
