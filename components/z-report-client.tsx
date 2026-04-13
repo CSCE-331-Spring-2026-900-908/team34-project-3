@@ -1,23 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  CalendarDays,
-  CheckCircle2,
-  Clock3,
-  FileClock,
-  ReceiptText,
-  RefreshCw,
-  ShieldAlert,
-  TrendingUp
-} from "lucide-react";
+import { CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ZReportData, ZReportHistoryEntry } from "@/lib/db/reports";
+import { Card, CardContent } from "@/components/ui/card";
+import type { ZReportData } from "@/lib/db/reports";
 import { cn, formatCurrency } from "@/lib/utils";
 
 type Props = {
@@ -43,55 +33,29 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-function MetricCard({
-  title,
-  value,
-  icon
-}: {
-  title: string;
-  value: string | number;
-  icon: ReactNode;
-}) {
+function SummaryCell({ label, value }: { label: string; value: string | number }) {
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="flex items-start justify-between gap-4 p-6">
-        <div className="space-y-2">
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">{title}</p>
-          <p className="text-3xl font-semibold tracking-tight text-foreground">{value}</p>
-        </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-[rgb(var(--surface-alt))] text-stone-700">
-          {icon}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="border-b border-border px-4 py-3 sm:border-b-0 sm:border-r last:border-r-0">
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{label}</p>
+      <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
+    </div>
   );
 }
 
-function HistoryEntryCard({ entry }: { entry: ZReportHistoryEntry }) {
+function SectionHeading({ title, meta }: { title: string; meta?: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] px-4 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="font-medium text-foreground">{formatBusinessDate(entry.businessDate)}</p>
-          <p className="text-sm text-stone-600">Generated {formatDateTime(entry.generatedAt)}</p>
-          <p className="text-sm text-stone-500">{entry.generatedByEmployeeName ?? "Manager generated"}</p>
-        </div>
-      </div>
+    <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border px-4 py-3">
+      <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-foreground">{title}</h2>
+      {meta ? <p className="text-xs text-stone-500">{meta}</p> : null}
+    </div>
+  );
+}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-white/80 bg-white/70 px-3 py-3">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Sales</p>
-          <p className="mt-1 text-sm font-semibold text-foreground">{formatCurrency(entry.totalSales)}</p>
-        </div>
-        <div className="rounded-2xl border border-white/80 bg-white/70 px-3 py-3">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Orders</p>
-          <p className="mt-1 text-sm font-semibold text-foreground">{entry.orderCount}</p>
-        </div>
-        <div className="rounded-2xl border border-white/80 bg-white/70 px-3 py-3">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Average</p>
-          <p className="mt-1 text-sm font-semibold text-foreground">{formatCurrency(entry.averageOrderValue)}</p>
-        </div>
-      </div>
+function PreviewRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-4 border-b border-border px-4 py-3 text-sm last:border-b-0">
+      <dt className="font-medium text-stone-600">{label}</dt>
+      <dd className="text-foreground">{value}</dd>
     </div>
   );
 }
@@ -101,6 +65,7 @@ export function ZReportClient({ report }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
   const latestGenerated = report.latestGeneratedReport;
+  const reportWindowStartedAt = report.preview.lastZReportGeneratedAt ?? report.preview.windowStartedAt;
 
   function handleRefresh() {
     startRefresh(() => {
@@ -136,146 +101,124 @@ export function ZReportClient({ report }: Props) {
   }
 
   return (
-    <div className="grid gap-6">
-      <Card>
-        <CardContent className="flex flex-col gap-5 p-6 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-4">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground">Daily closeout</h2>
+    <div className="grid gap-4">
+      <Card className="rounded-xl">
+        <CardContent className="p-0">
+          <div className="flex flex-col gap-3 border-b border-border px-4 py-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-foreground">Current Closeout</h2>
+              <p className="text-sm text-stone-500">
+                {report.canGenerate ? "Ready to generate." : "Already generated for today."}
+              </p>
+              <p className="text-sm text-stone-500">
+                {latestGenerated
+                  ? `Last generated ${formatDateTime(latestGenerated.generatedAt)}`
+                  : "No previous Z report recorded."}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="gap-2">
+                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                Refresh
+              </Button>
+              <Button size="sm" onClick={handleGenerate} disabled={!report.canGenerate || isGenerating} className="gap-2">
+                {report.canGenerate ? <CheckCircle2 className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                {!report.canGenerate ? "Already Generated" : isGenerating ? "Generating..." : "Generate Z Report"}
+              </Button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing} className="gap-2">
-              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-              Refresh
-            </Button>
-            <Button onClick={handleGenerate} disabled={!report.canGenerate || isGenerating} className="gap-2">
-              {report.canGenerate ? <CheckCircle2 className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
-              {!report.canGenerate ? "Already Generated" : isGenerating ? "Generating..." : "Generate Z Report"}
-            </Button>
+          <div className="grid sm:grid-cols-5">
+            <SummaryCell label="Business Date" value={formatBusinessDate(report.businessDate)} />
+            <SummaryCell label="Window Start" value={formatDateTime(reportWindowStartedAt)} />
+            <SummaryCell label="Total Sales" value={formatCurrency(report.preview.totalSales)} />
+            <SummaryCell label="Order Count" value={report.preview.orderCount} />
+            <SummaryCell label="Average Ticket" value={formatCurrency(report.preview.averageOrderValue)} />
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <MetricCard
-          title="Business Date"
-          value={formatBusinessDate(report.businessDate)}
-          icon={<CalendarDays className="h-5 w-5" />}
-        />
-        <MetricCard
-          title="Total Sales"
-          value={formatCurrency(report.preview.totalSales)}
-          icon={<TrendingUp className="h-5 w-5" />}
-        />
-        <MetricCard
-          title="Order Count"
-          value={report.preview.orderCount}
-          icon={<ReceiptText className="h-5 w-5" />}
-        />
-        <MetricCard
-          title="Average Ticket"
-          value={formatCurrency(report.preview.averageOrderValue)}
-          icon={<Clock3 className="h-5 w-5" />}
-        />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Current Closeout Preview</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Business Date</p>
-              <p className="mt-2 text-lg font-semibold text-foreground">{formatBusinessDate(report.preview.businessDate)}</p>
-            </div>
-
-            <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Report Window</p>
-              <p className="mt-2 text-lg font-semibold text-foreground">
-                {formatDateTime(report.preview.lastZReportGeneratedAt ?? report.preview.windowStartedAt)}
-              </p>
-            </div>
-
-            <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Sales Total</p>
-              <p className="mt-2 text-lg font-semibold text-foreground">{formatCurrency(report.preview.totalSales)}</p>
-            </div>
-
-            <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Orders And Average</p>
-              <p className="mt-2 text-lg font-semibold text-foreground">
-                {report.preview.orderCount} orders | {formatCurrency(report.preview.averageOrderValue)}
-              </p>
-            </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <Card className="rounded-xl">
+          <CardContent className="p-0">
+            <SectionHeading title="Current Closeout Preview" />
+            <dl>
+              <PreviewRow label="Business Date" value={formatBusinessDate(report.preview.businessDate)} />
+              <PreviewRow label="Window Start" value={formatDateTime(reportWindowStartedAt)} />
+              <PreviewRow label="Total Sales" value={formatCurrency(report.preview.totalSales)} />
+              <PreviewRow label="Order Count" value={report.preview.orderCount} />
+              <PreviewRow label="Average Order Value" value={formatCurrency(report.preview.averageOrderValue)} />
+            </dl>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Closeout Status</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div
-              className={cn(
-                "rounded-[1.5rem] border p-4",
-                report.canGenerate
-                  ? "border-emerald-200 bg-emerald-50/80 text-emerald-900"
-                  : "border-amber-200 bg-amber-50/80 text-amber-900"
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5">
-                  {report.canGenerate ? <CheckCircle2 className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
-                </div>
-                <div className="space-y-1">
-                  <p className="font-semibold">
-                    {report.canGenerate ? "Ready to generate" : "Already generated for today"}
-                  </p>
-                  <p className="text-sm">
-                    {report.canGenerate
-                      ? "No Z report exists for this business date."
-                      : "A Z report already exists for this business date."}
-                  </p>
-                </div>
+        <Card className="rounded-xl">
+          <CardContent className="p-0">
+            <SectionHeading title="Closeout Status" />
+            <div className="divide-y divide-border text-sm">
+              <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-4 px-4 py-3">
+                <span className="font-medium text-stone-600">Status</span>
+                <span className="text-foreground">
+                  {report.canGenerate ? "Ready to generate" : "Already generated for today"}
+                </span>
               </div>
-            </div>
-
-            <div className="rounded-[1.5rem] border border-border bg-[rgb(var(--surface-alt))] p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-stone-700">
-                <FileClock className="h-4 w-4" />
-                Latest recorded closeout
+              <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-4 px-4 py-3">
+                <span className="font-medium text-stone-600">Latest Closeout</span>
+                <span className="text-foreground">
+                  {latestGenerated
+                    ? `${formatBusinessDate(latestGenerated.businessDate)} at ${formatDateTime(latestGenerated.generatedAt)}`
+                    : "No previous Z report recorded"}
+                </span>
               </div>
-              <p className="mt-3 text-sm text-stone-600">
-                {latestGenerated
-                  ? `${formatBusinessDate(latestGenerated.businessDate)} at ${formatDateTime(latestGenerated.generatedAt)}`
-                  : "No previous Z report has been recorded yet."}
-              </p>
-              {latestGenerated?.generatedByEmployeeName ? (
-                <p className="mt-1 text-sm text-stone-500">Generated by {latestGenerated.generatedByEmployeeName}</p>
-              ) : null}
+              <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-4 px-4 py-3">
+                <span className="font-medium text-stone-600">Generated By</span>
+                <span className="text-foreground">
+                  {latestGenerated?.generatedByEmployeeName ?? "Unavailable"}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <CardTitle>Previous Z Reports</CardTitle>
-          <p className="text-sm text-stone-500">
-            {report.history.length} report{report.history.length === 1 ? "" : "s"}
-          </p>
-        </CardHeader>
-        <CardContent>
+      <Card className="rounded-xl">
+        <CardContent className="p-0">
+          <SectionHeading title="Previous Z Reports" meta={`${report.history.length} report${report.history.length === 1 ? "" : "s"}`} />
           {report.history.length === 0 ? (
-            <div className="rounded-[1.5rem] border border-dashed border-border bg-[rgb(var(--surface-alt))] px-6 py-12 text-center text-sm text-stone-500">
-              No previous Z reports found.
-            </div>
+            <div className="px-4 py-6 text-sm text-stone-500">No previous Z reports found.</div>
           ) : (
-            <div className="grid gap-4">
-              {report.history.map((entry) => (
-                <HistoryEntryCard key={entry.id} entry={entry} />
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-[rgb(var(--surface-alt))] text-xs uppercase tracking-[0.14em] text-stone-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Date</th>
+                    <th className="px-4 py-3 text-left font-semibold">Generated</th>
+                    <th className="px-4 py-3 text-left font-semibold">By</th>
+                    <th className="px-4 py-3 text-right font-semibold">Sales</th>
+                    <th className="px-4 py-3 text-right font-semibold">Orders</th>
+                    <th className="px-4 py-3 text-right font-semibold">Average</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {report.history.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="px-4 py-3 font-medium text-foreground">{formatBusinessDate(entry.businessDate)}</td>
+                      <td className="px-4 py-3 text-stone-600">{formatDateTime(entry.generatedAt)}</td>
+                      <td className="px-4 py-3 text-stone-600">
+                        {entry.generatedByEmployeeName ?? "Unavailable"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-foreground">
+                        {formatCurrency(entry.totalSales)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-stone-600">{entry.orderCount}</td>
+                      <td className="px-4 py-3 text-right text-stone-600">
+                        {formatCurrency(entry.averageOrderValue)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
