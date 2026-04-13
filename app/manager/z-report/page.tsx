@@ -1,22 +1,22 @@
 import type { Route } from "next";
 import { redirect } from "next/navigation";
-import { BarChart3 } from "lucide-react";
+import { FileClock } from "lucide-react";
 
-import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
-import { XReportClient } from "@/components/x-report-client";
 import { PageHeader } from "@/components/page-header";
+import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
+import { ZReportClient } from "@/components/z-report-client";
 import { requireEmployeePage } from "@/lib/auth";
-import { getXReportData } from "@/lib/db/reports";
+import { getZReportData } from "@/lib/db/reports";
 import { getManagerNavLinks } from "@/lib/manager-nav";
 
-export default async function XReportPage() {
+export default async function ZReportPage() {
   const employee = await requireEmployeePage();
 
   if (!employee.isManager) {
     redirect("/pos");
   }
 
-  const report = await getXReportData();
+  const report = await getZReportData();
 
   return (
     <>
@@ -24,13 +24,13 @@ export default async function XReportPage() {
       <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen bg-[rgb(var(--background))]">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <PageHeader
-            icon={<BarChart3 className="h-7 w-7" />}
+            icon={<FileClock className="h-7 w-7" />}
             sectionLabel="Reporting"
-            title="X Report"
+            title="Z Report"
             employeeBadge={`${employee.fullName} (Manager)`}
-            links={getManagerNavLinks("/manager/x-report" as Route)}
+            links={getManagerNavLinks("/manager/z-report" as Route)}
           />
-          <XReportClient report={report} />
+          <ZReportClient report={report} />
         </div>
       </main>
     </>
