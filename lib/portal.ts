@@ -17,7 +17,7 @@ export const portalDestinations: PortalDestination[] = [
   },
   {
     title: "Customer Kiosk",
-    description: "UNDER CONSTRUCTION...",
+    description: "Customer self-service tools.",
     href: "/customer-login?next=/kiosk"
   },
   {

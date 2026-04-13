@@ -19,7 +19,7 @@ export async function getMenuItems() {
         name: item.name,
         cost: decimalToNumber(item.cost),
         ingredients: Object.fromEntries(item.itemingredient.map((entry) => [entry.ingredient_id, entry.quantity])),
-        imageUrl: "https://placehold.net/default.png"
+        imageUrl: `/menu-items/menuitem_${item.id}.png`
       }) satisfies MenuItemRecord
   );
 }
