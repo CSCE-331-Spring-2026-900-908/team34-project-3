@@ -2,7 +2,7 @@
 
 // --- REPURPOSED FOR KIOSK (Imports) ---
 // We keep most imports. We just need to update the types we use.
-import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt } from "lucide-react";
+import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomerWeatherWidget } from "@/components/customer-weather-widget";
 import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
+import { TouchscreenInput } from "@/components/touchscreen-input";
 // We now import SessionCustomer instead of SessionEmployee
 import type { IngredientRecord, MenuItemRecord, SessionCustomer } from "@/lib/types";
 import { useOrderStore } from "@/lib/stores/order-store";
@@ -69,6 +70,44 @@ function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: 
 }
 // End of copied block from POS //
 
+function getDrinkCategory(name: string) {
+    const normalized = name.toLowerCase();
+
+    if (normalized.includes("green tea")) {
+        return "Green Tea";
+    }
+
+    if (normalized.includes("black tea")) {
+        return "Black Tea";
+    }
+
+    if (normalized.includes("oolong")) {
+        return "Oolong Tea";
+    }
+
+    if (normalized.includes("milk tea")) {
+        return "Milk Tea";
+    }
+
+    if (normalized.includes("latte")) {
+        return "Latte";
+    }
+
+    if (
+        normalized.includes("grapefruit") ||
+        normalized.includes("mango") ||
+        normalized.includes("passionfruit") ||
+        normalized.includes("strawberry") ||
+        normalized.includes("lychee") ||
+        normalized.includes("peach") ||
+        normalized.includes("wintermelon")
+    ) {
+        return "Fruit Tea";
+    }
+
+    return "Specialty";
+}
+
 // --- REPURPOSED FOR KIOSK (Component Definition) ---
 // We rename the component and update its props.
 export function KioskClient({ customer, menuItems, ingredients }: KioskClientProps) {
@@ -80,6 +119,9 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const removeItem = useOrderStore((state) => state.removeItem);
     const clear = useOrderStore((state) => state.clear);
     const [selectedItem, setSelectedItem] = useState<MenuItemRecord | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [activeCategory, setActiveCategory] = useState("All");
+    const [searchKeyboardOpen, setSearchKeyboardOpen] = useState(false);
     // ... (all other useState and useEffect hooks are identical, copy them here) ...
 
     // Start of copied block from POS //
@@ -217,6 +259,19 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     // End of copied block from POS //
 
     const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
+    const categories = useMemo(
+        () => ["All", ...Array.from(new Set(menuItems.map((item) => getDrinkCategory(item.name))))],
+        [menuItems]
+    );
+    const filteredMenuItems = useMemo(() => {
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+
+        return menuItems.filter((item) => {
+            const matchesCategory = activeCategory === "All" || getDrinkCategory(item.name) === activeCategory;
+            const matchesSearch = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery);
+            return matchesCategory && matchesSearch;
+        });
+    }, [activeCategory, menuItems, searchQuery]);
 
     // All the functions (closeModal, updateIngredient, addSelectedItem, handleCheckout) are
     // IDENTICAL to pos-client.tsx [4], copy them here.
@@ -316,7 +371,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             <SkipLink />
             {/* --- REPURPOSED FOR KIOSK (Main Layout) --- */}
             <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen bg-stone-100">
-                <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8", searchKeyboardOpen && "pb-[32rem]")}>
 
                     {/* --- REPURPOSED FOR KIOSK (Header) --- */}
                     {/* We replace the employee-specific header with a customer welcome message. */}
@@ -341,13 +396,39 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_380px]">
                         <Card className="shadow-sm">
                             <CardHeader>
-                                <CardTitle>Menu</CardTitle>
+                                <div className="space-y-4">
+                                    <CardTitle>Menu</CardTitle>
+                                    <div className="flex flex-col gap-4">
+                                        <div className="relative max-w-md">
+                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                                            <TouchscreenInput
+                                                value={searchQuery}
+                                                onValueChange={setSearchQuery}
+                                                onKeyboardOpenChange={setSearchKeyboardOpen}
+                                                placeholder="Search for a drink"
+                                                className="pl-9"
+                                            />
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {categories.map((category) => (
+                                                <Button
+                                                    key={category}
+                                                    variant={activeCategory === category ? "default" : "outline"}
+                                                    size="sm"
+                                                    onClick={() => setActiveCategory(category)}
+                                                >
+                                                    {category}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                             </CardHeader>
                             <CardContent>
                                 {/* --- REPURPOSED FOR KIOSK (Menu Grid) --- */}
                                 {/* We change the grid to be more spacious and visually appealing for a kiosk. */}
                                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                                    {menuItems.map((item) => (
+                                    {filteredMenuItems.map((item) => (
                                         // --- REPURPOSED FOR KIOSK (Menu Item Card) ---
                                         // This is the biggest change. We replace the simple text button from PosClient [4]
                                         // with a large, visual, clickable card that includes our new `imageUrl`.
@@ -372,6 +453,11 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         </button>
                                     ))}
                                 </div>
+                                {filteredMenuItems.length === 0 ? (
+                                    <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-5 py-8 text-center text-sm text-stone-500">
+                                        No drinks match your current search and category filters.
+                                    </div>
+                                ) : null}
                             </CardContent>
                         </Card>
 
