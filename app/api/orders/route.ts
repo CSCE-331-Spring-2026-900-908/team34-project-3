@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { unauthorizedJson } from "@/lib/auth";
 import { completeCurrentOrder } from "@/lib/db/orders";
-import { getOrCreateRewards } from "@/lib/db/rewards";
+import { getOrCreateRewards, redeemPoints } from "@/lib/db/rewards";
 import { getSessionCustomer, getSessionEmployee } from "@/lib/session";
 import { completeOrderSchema } from "@/lib/validation";
 
@@ -36,6 +36,9 @@ export async function POST(request: Request) {
 
   try {
     await completeCurrentOrder(employeeId, parsed.data.items, customerGoogleId);
+    if (customer && parsed.data.pointsToRedeem > 0) {
+      await redeemPoints(customer.googleId, parsed.data.pointsToRedeem);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to complete order.";
     return NextResponse.json({ error: message }, { status: 500 });

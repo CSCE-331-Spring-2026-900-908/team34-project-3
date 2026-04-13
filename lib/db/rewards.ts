@@ -111,6 +111,22 @@ export async function addRewardPoints(
   return mapRewardsRow(record);
 }
 
+export async function redeemPoints(googleId: string, pointsToRedeem: number): Promise<void> {
+  await ensureRewardsTable();
+
+  const rows = await prisma.$queryRaw<Array<{ points: number }>>`
+    UPDATE customer_rewards
+    SET points = points - ${pointsToRedeem},
+        updated_at = NOW()
+    WHERE google_id = ${googleId} AND points >= ${pointsToRedeem}
+    RETURNING points
+  `;
+
+  if (!rows[0]) {
+    throw new Error("Insufficient points.");
+  }
+}
+
 export async function getRewardsBalance(googleId: string): Promise<number> {
   await ensureRewardsTable();
 
