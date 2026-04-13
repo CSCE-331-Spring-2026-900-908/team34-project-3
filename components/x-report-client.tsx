@@ -23,6 +23,10 @@ type ChartTick = {
   value: number;
 };
 
+function formatAxisCurrency(value: number, step: number) {
+  return `$${value.toFixed(step >= 10 ? 0 : 2).replace(/\.00$/, "")}`;
+}
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -94,7 +98,7 @@ function buildChartTicks(maxValue: number): ChartTick[] {
 
     return {
       value,
-      label: value.toFixed(step >= 10 ? 0 : 2).replace(/\.00$/, "")
+      label: formatAxisCurrency(value, step)
     };
   });
 }
@@ -157,7 +161,7 @@ export function XReportClient({ report }: Props) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_340px]">
         <Card className="rounded-xl">
           <CardContent className="p-0">
-            <SectionHeading title="Hourly Sales" />
+            <SectionHeading title="Hourly Sales" meta="Revenue by completed order hour" />
             <div className="p-4">
               {chartBars.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-[rgb(var(--surface-alt))] px-4 py-10 text-center text-sm text-stone-500">
@@ -167,23 +171,32 @@ export function XReportClient({ report }: Props) {
                 <div className="overflow-x-auto rounded-lg border border-border bg-[rgb(var(--surface-alt))] p-3">
                   <div className="min-w-[640px]">
                     <svg
-                      viewBox="0 0 960 320"
+                      viewBox="0 0 960 344"
                       role="img"
                       aria-label="Hourly sales bar chart"
                       className="h-auto w-full"
                     >
                       {(() => {
-                        const marginLeft = 52;
+                        const marginLeft = 64;
                         const marginTop = 10;
                         const marginRight = 12;
-                        const marginBottom = 36;
+                        const marginBottom = 60;
                         const plotWidth = 960 - marginLeft - marginRight;
-                        const plotHeight = 320 - marginTop - marginBottom;
+                        const plotHeight = 344 - marginTop - marginBottom;
                         const columnWidth = plotWidth / chartBars.length;
                         const barWidth = Math.max(Math.min(columnWidth * 0.66, 40), 12);
 
                         return (
                           <>
+                            <text
+                              x={marginLeft}
+                              y={marginTop - 2}
+                              fontSize="11"
+                              fill="#57534e"
+                            >
+                              Sales ($)
+                            </text>
+
                             {chartTicks.map((tick) => {
                               const y = marginTop + plotHeight - (tick.value / chartMax) * plotHeight;
 
@@ -256,6 +269,15 @@ export function XReportClient({ report }: Props) {
                               stroke="#78716c"
                               strokeWidth="1.5"
                             />
+                            <text
+                              x={marginLeft + plotWidth / 2}
+                              y={marginTop + plotHeight + 42}
+                              textAnchor="middle"
+                              fontSize="11"
+                              fill="#57534e"
+                            >
+                              Hour of day
+                            </text>
                           </>
                         );
                       })()}
