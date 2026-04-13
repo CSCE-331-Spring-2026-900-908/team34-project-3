@@ -23,7 +23,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid employee." }, { status: 400 });
   }
 
-  await addEmployee(parsed.data.firstName.trim(), parsed.data.lastName.trim(), parsed.data.isManager);
+  await addEmployee(
+    parsed.data.firstName.trim(),
+    parsed.data.lastName.trim(),
+    parsed.data.email.trim().toLowerCase(),
+    parsed.data.isManager
+  );
 
   return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { buildGoogleTranslateUrl, getGoogleTranslateApiKey } from "@/lib/translation";
+import { buildGoogleTranslateUrl, getGoogleApiErrorMessage, getGoogleTranslateApiKey } from "@/lib/translation";
 
 type TranslateRequestBody = {
   targetLanguage?: unknown;
@@ -36,25 +36,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ translations: [] });
   }
 
-  const response = await fetch(`${buildGoogleTranslateUrl()}?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      q: texts,
-      target: targetLanguage,
-      format: "text"
-    }),
-    cache: "no-store"
-  });
+  try {
+    const response = await fetch(`${buildGoogleTranslateUrl()}?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        q: texts,
+        target: targetLanguage,
+        format: "text"
+      }),
+      cache: "no-store"
+    });
 
-  if (!response.ok) {
-    return NextResponse.json({ error: "Unable to translate this page right now." }, { status: 502 });
+    if (!response.ok) {
+      const message = await getGoogleApiErrorMessage(response, "Unable to translate this page right now.");
+      console.error("Google Translate request failed:", message);
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+
+    const payload = (await response.json()) as GoogleTranslateResponse;
+    const translations = (payload.data?.translations ?? []).map((entry) => entry.translatedText ?? "");
+
+    return NextResponse.json({ translations });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Google Translate request threw:", message);
+    return NextResponse.json({ error: `Unable to translate this page right now. ${message}` }, { status: 502 });
   }
-
-  const payload = (await response.json()) as GoogleTranslateResponse;
-  const translations = (payload.data?.translations ?? []).map((entry) => entry.translatedText ?? "");
-
-  return NextResponse.json({ translations });
 }
