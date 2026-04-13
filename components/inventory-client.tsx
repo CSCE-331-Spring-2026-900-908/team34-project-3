@@ -1,39 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { RestockOrder, Ingredient, CriticalIngredient } from "@/lib/db/inventory";
+import type { RestockOrder, Ingredient, CriticalIngredient } from "@/lib/db/inventory"
 
 type Props = {
   orders: RestockOrder[];
   criticalIngredients: CriticalIngredient[];
-  allIngredients: Ingredient[];
 };
 
-export function InventoryClient({ orders, criticalIngredients, allIngredients }: Props) {
-  const sortedIngredients = useMemo(() => {
-    const criticalIds = new Set(criticalIngredients.map((c) => c.id));
-    const criticalMap = new Map(criticalIngredients.map((c) => [c.id, c]));
-
-    const critical = allIngredients
-      .filter((ing) => criticalIds.has(ing.id))
-      .sort((a, b) => a.servingsAvailable - b.servingsAvailable);
-
-    const nonCritical = allIngredients
-      .filter((ing) => !criticalIds.has(ing.id))
-      .sort((a, b) => a.servingsAvailable - b.servingsAvailable);
-
-    return [...critical, ...nonCritical].map((ing) => ({
-      ...ing,
-      isCritical: criticalIds.has(ing.id),
-      recommendedRestockQty: criticalMap.get(ing.id)?.recommendedRestockQty
-    }));
-  }, [allIngredients, criticalIngredients]);
-
+export function InventoryClient({ orders, criticalIngredients }: Props) {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
 
@@ -41,6 +20,7 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Previous Orders</h2>
+          {/* FIX: Wrapped Button in Link and removed asChild */}
           <Link href="/manager/inventory/create">
             <Button size="sm">
               + New Order
@@ -77,6 +57,7 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
                     >
                       {order.status}
                     </Badge>
+                    {/* FIX: Wrapped Button in Link and removed asChild */}
                     <Link href={`/manager/inventory/${order.id}`}>
                       <Button variant="outline" size="sm">
                         View Details
@@ -90,30 +71,23 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
         )}
       </section>
 
-      {/* Right: All ingredients sorted by criticality */}
+      {/* Right: Critical items */}
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Ingredient Stock Levels</h2>
+        <h2 className="text-lg font-semibold">Critical Items</h2>
 
-        {sortedIngredients.length === 0 ? (
-          <p className="text-sm italic text-stone-500">No ingredients found.</p>
+        {criticalIngredients.length === 0 ? (
+          <p className="text-sm italic text-stone-500">All ingredients are sufficiently stocked.</p>
         ) : (
-          sortedIngredients.map((ing) => (
-            <Card key={ing.id} className={ing.isCritical ? "border-red-200" : ""}>
+          criticalIngredients.map((ing) => (
+            <Card key={ing.id} className="border-red-200">
               <CardContent className="space-y-1 py-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold">{ing.name}</p>
-                  {ing.isCritical ? (
-                    <Badge className="border-red-300 text-red-600">Critical</Badge>
-                  ) : null}
-                </div>
+                <p className="font-semibold">{ing.name}</p>
                 <p className="text-sm text-stone-500">
                   Current stock: {ing.servingsAvailable} servings
                 </p>
-                {ing.isCritical && ing.recommendedRestockQty != null ? (
-                  <p className="text-sm text-red-600">
-                    Recommended restock: {ing.recommendedRestockQty} units
-                  </p>
-                ) : null}
+                <p className="text-sm text-danger">
+                  Recommended restock: {ing.recommendedRestockQty} units
+                </p>
               </CardContent>
             </Card>
           ))

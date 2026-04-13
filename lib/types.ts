@@ -1,21 +1,14 @@
-export type AppRole = "customer" | "cashier" | "manager";
-
 export type SessionEmployee = {
   employeeId: number;
   firstName: string;
   lastName: string;
   fullName: string;
-  email: string;
-  googleId: string;
-  role: "cashier" | "manager";
   isManager: boolean;
-  picture?: string;
 };
 
 export type SessionCustomer = {
   googleId: string;
   email: string;
-  role: "customer";
   fullName: string;
   firstName: string;
   lastName: string;
@@ -65,9 +58,7 @@ export type EmployeeRecord = {
   employeeId: number;
   firstName: string;
   lastName: string;
-  email: string | null;
   isManager: boolean;
-  hasGoogleAccount: boolean;
 };
 
 export type RestockOrderItemRecord = {

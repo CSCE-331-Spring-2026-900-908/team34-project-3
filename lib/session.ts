@@ -6,9 +6,8 @@ import type { SessionCustomer, SessionEmployee } from "@/lib/types";
 type AppSessionData = {
   employee?: SessionEmployee;
   customer?: SessionCustomer;
-  googleAuthState?: string;
-  googleAuthNext?: string;
-  googleAuthLogin?: string;
+  customerAuthState?: string;
+  customerAuthNext?: string;
 };
 
 const fallbackSecret = "development-session-secret-please-change";
@@ -31,10 +30,6 @@ export async function getSession() {
 export async function saveEmployeeSession(employee: SessionEmployee) {
   const session = await getSession();
   session.employee = employee;
-  delete session.customer;
-  delete session.googleAuthState;
-  delete session.googleAuthNext;
-  delete session.googleAuthLogin;
   await session.save();
 }
 
@@ -42,7 +37,7 @@ export async function destroyEmployeeSession() {
   const session = await getSession();
   delete session.employee;
 
-  if (!session.customer && !session.googleAuthState && !session.googleAuthNext && !session.googleAuthLogin) {
+  if (!session.customer && !session.customerAuthState && !session.customerAuthNext) {
     await session.destroy();
     return;
   }
@@ -58,19 +53,16 @@ export async function getSessionEmployee() {
 export async function saveCustomerSession(customer: SessionCustomer) {
   const session = await getSession();
   session.customer = customer;
-  delete session.employee;
-  delete session.googleAuthState;
-  delete session.googleAuthNext;
-  delete session.googleAuthLogin;
+  delete session.customerAuthState;
+  delete session.customerAuthNext;
   await session.save();
 }
 
 export async function destroyCustomerSession() {
   const session = await getSession();
   delete session.customer;
-  delete session.googleAuthState;
-  delete session.googleAuthNext;
-  delete session.googleAuthLogin;
+  delete session.customerAuthState;
+  delete session.customerAuthNext;
 
   if (!session.employee) {
     await session.destroy();
@@ -85,23 +77,20 @@ export async function getSessionCustomer() {
   return session.customer ?? null;
 }
 
-export async function beginGoogleAuth(state: string, nextPath: string, loginPath: string) {
+export async function beginCustomerAuth(state: string, nextPath: string) {
   const session = await getSession();
-  session.googleAuthState = state;
-  session.googleAuthNext = nextPath;
-  session.googleAuthLogin = loginPath;
+  session.customerAuthState = state;
+  session.customerAuthNext = nextPath;
   await session.save();
 }
 
-export async function consumeGoogleAuth() {
+export async function consumeCustomerAuth() {
   const session = await getSession();
-  const authState = session.googleAuthState ?? null;
-  const nextPath = session.googleAuthNext ?? null;
-  const loginPath = session.googleAuthLogin ?? null;
-  delete session.googleAuthState;
-  delete session.googleAuthNext;
-  delete session.googleAuthLogin;
+  const authState = session.customerAuthState ?? null;
+  const nextPath = session.customerAuthNext ?? null;
+  delete session.customerAuthState;
+  delete session.customerAuthNext;
   await session.save();
 
-  return { authState, nextPath, loginPath };
+  return { authState, nextPath };
 }

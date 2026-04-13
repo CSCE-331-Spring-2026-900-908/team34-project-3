@@ -30,7 +30,6 @@ export async function PUT(
     Number(params.id),
     parsed.data.firstName.trim(),
     parsed.data.lastName.trim(),
-    parsed.data.email.trim().toLowerCase(),
     parsed.data.isManager
   );
 
