@@ -118,7 +118,7 @@ export async function completeCurrentOrder(employeeId: number, items: OrderItemI
   });
 
   if (customerGoogleId) {
-    const pointsEarned = Math.floor(orderTotal * 10);
+    const pointsEarned = Math.floor(orderTotal * 4);
     if (pointsEarned > 0) {
       await addRewardPoints(customerGoogleId, pointsEarned);
     }
