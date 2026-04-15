@@ -35,10 +35,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    await completeCurrentOrder(employeeId, parsed.data.items, customerGoogleId);
     if (customer && parsed.data.pointsToRedeem > 0) {
       await redeemPoints(customer.googleId, parsed.data.pointsToRedeem);
     }
+    await completeCurrentOrder(employeeId, parsed.data.items, customerGoogleId, parsed.data.pointsToRedeem);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to complete order.";
     return NextResponse.json({ error: message }, { status: 500 });

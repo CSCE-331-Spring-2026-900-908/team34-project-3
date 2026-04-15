@@ -31,7 +31,13 @@ function computeItemTotal(baseCost: number, item: OrderItemInput) {
   return (baseCost + ingredientCost) * item.quantity;
 }
 
-export async function completeCurrentOrder(employeeId: number, items: OrderItemInput[], customerGoogleId?: string) {
+export async function completeCurrentOrder(
+  employeeId: number,
+  items: OrderItemInput[],
+  customerGoogleId?: string,
+  pointsToRedeem: number = 0
+) {
+  const rewardsDiscount = Math.floor(pointsToRedeem / 100);
   const orderTotal = await prisma.$transaction(async (tx) => {
     const order = await tx.orders.create({
       data: {
@@ -105,16 +111,18 @@ export async function completeCurrentOrder(employeeId: number, items: OrderItemI
       }
     }
 
+    const paidTotal = Math.max(0, total - rewardsDiscount);
+
     await tx.orders.update({
       where: {
         order_id: order.order_id
       },
       data: {
-        cost: new Prisma.Decimal(total)
+        cost: new Prisma.Decimal(paidTotal)
       }
     });
 
-    return total;
+    return paidTotal;
   });
 
   if (customerGoogleId) {

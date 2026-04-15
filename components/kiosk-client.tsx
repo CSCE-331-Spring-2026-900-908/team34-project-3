@@ -269,7 +269,17 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }, []);
 
     const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
+    const maxRedeemablePoints = Math.min(
+        Math.floor(rewardsPoints / 100) * 100,
+        Math.floor(cartTotal) * 100
+    );
     const discount = Math.floor(pointsToRedeem / 100);
+
+    useEffect(() => {
+        if (pointsToRedeem > maxRedeemablePoints) {
+            setPointsToRedeem(maxRedeemablePoints);
+        }
+    }, [maxRedeemablePoints, pointsToRedeem]);
     const categories = useMemo(
         () => ["All", ...Array.from(new Set(menuItems.map((item) => getDrinkCategory(item.name))))],
         [menuItems]
@@ -493,8 +503,8 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => setPointsToRedeem((p) => Math.min(Math.floor(rewardsPoints / 100) * 100, p + 100))}
-                                                    disabled={pointsToRedeem >= Math.floor(rewardsPoints / 100) * 100}
+                                                    onClick={() => setPointsToRedeem((p) => Math.min(maxRedeemablePoints, p + 100))}
+                                                    disabled={pointsToRedeem >= maxRedeemablePoints}
                                                 >
                                                     <Plus className="h-4 w-4" />
                                                 </Button>
