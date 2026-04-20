@@ -34,10 +34,21 @@ export const orderItemInputSchema = z.object({
   cost: z.number().nonnegative()
 });
 
+export const redemptionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }),
+  z.object({
+    kind: z.literal("flat"),
+    points: z.number().int().min(0).refine((v) => v % 100 === 0, "Flat points must be a multiple of 100.")
+  }),
+  z.object({ kind: z.literal("addons") }),
+  z.object({ kind: z.literal("tier1") }),
+  z.object({ kind: z.literal("tier2") })
+]);
+
 export const completeOrderSchema = z.object({
   items: z.array(orderItemInputSchema).min(1, "Add at least one item."),
   customerGoogleId: z.string().optional(),
-  pointsToRedeem: z.number().int().min(0).optional().default(0)
+  redemption: redemptionSchema.optional().default({ kind: "none" })
 });
 
 export const employeeFormSchema = z.object({

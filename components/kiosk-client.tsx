@@ -16,6 +16,7 @@ import type { IngredientRecord, MenuItemRecord, SessionCustomer } from "@/lib/ty
 import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
 import Chatbot from "@/components/chatbot";
+import { REWARDS_RULES, resolveRedemption, type Redemption } from "@/lib/rewards-rules";
 
 // --- REPURPOSED FOR KIOSK (Props) ---
 // The props are changed to accept a `customer` object instead of an `employee` object.
@@ -124,7 +125,8 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [searchKeyboardOpen, setSearchKeyboardOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<"menu" | "rewards">("menu");
     const [rewardsPoints, setRewardsPoints] = useState(0);
-    const [pointsToRedeem, setPointsToRedeem] = useState(0);
+    const [redemption, setRedemption] = useState<Redemption>({ kind: "none" });
+    const [flatPoints, setFlatPoints] = useState(0);
     // ... (all other useState and useEffect hooks are identical, copy them here) ...
 
     // Start of copied block from POS //
@@ -269,17 +271,61 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }, []);
 
     const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
-    const maxRedeemablePoints = Math.min(
+    const cartAddonTotal = useMemo(
+        () =>
+            items.reduce((sum, item) => {
+                const ingredientCost = item.ingredientChoices.reduce(
+                    (acc, choice) => acc + choice.addCost * choice.quantity,
+                    0
+                );
+                return sum + ingredientCost * item.quantity;
+            }, 0),
+        [items]
+    );
+    const baseSubtotal = cartTotal - cartAddonTotal;
+    const hasAddons = cartAddonTotal > 0;
+
+    const maxFlatPoints = Math.min(
         Math.floor(rewardsPoints / 100) * 100,
         Math.floor(cartTotal) * 100
     );
-    const discount = Math.floor(pointsToRedeem / 100);
+
+    const flatEligible = maxFlatPoints >= 100;
+    const addonsEligible = rewardsPoints >= REWARDS_RULES.addons.points && hasAddons;
+    const tier1Eligible = rewardsPoints >= REWARDS_RULES.tier1.points && cartTotal >= REWARDS_RULES.tier1.minCart;
+    const tier2Eligible = rewardsPoints >= REWARDS_RULES.tier2.points && cartTotal >= REWARDS_RULES.tier2.minCart;
 
     useEffect(() => {
-        if (pointsToRedeem > maxRedeemablePoints) {
-            setPointsToRedeem(maxRedeemablePoints);
+        if (flatPoints > maxFlatPoints) {
+            setFlatPoints(maxFlatPoints);
         }
-    }, [maxRedeemablePoints, pointsToRedeem]);
+    }, [maxFlatPoints, flatPoints]);
+
+    useEffect(() => {
+        if (redemption.kind === "flat" && redemption.points !== flatPoints) {
+            setRedemption({ kind: "flat", points: flatPoints });
+        }
+    }, [flatPoints, redemption]);
+
+    useEffect(() => {
+        if (redemption.kind === "flat" && !flatEligible) {
+            setRedemption({ kind: "none" });
+        } else if (redemption.kind === "addons" && !addonsEligible) {
+            setRedemption({ kind: "none" });
+        } else if (redemption.kind === "tier1" && !tier1Eligible) {
+            setRedemption({ kind: "none" });
+        } else if (redemption.kind === "tier2" && !tier2Eligible) {
+            setRedemption({ kind: "none" });
+        }
+    }, [redemption, flatEligible, addonsEligible, tier1Eligible, tier2Eligible]);
+
+    let resolved;
+    try {
+        resolved = resolveRedemption(redemption, cartTotal, baseSubtotal);
+    } catch {
+        resolved = { pointsCost: 0, discount: 0, freeAddons: false };
+    }
+    const discount = resolved.discount;
     const categories = useMemo(
         () => ["All", ...Array.from(new Set(menuItems.map((item) => getDrinkCategory(item.name))))],
         [menuItems]
@@ -359,7 +405,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ items, pointsToRedeem })
+            body: JSON.stringify({ items, redemption })
         });
 
         setCheckoutPending(false);
@@ -371,7 +417,8 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         }
 
         clear();
-        setPointsToRedeem(0);
+        setRedemption({ kind: "none" });
+        setFlatPoints(0);
         setActiveTab("menu");
         // Refresh points balance after checkout (earned points added, redeemed points subtracted)
         fetch("/api/rewards")
@@ -488,32 +535,162 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                             <p className="mt-1 text-sm text-blue-500">Worth {formatCurrency(Math.floor(rewardsPoints / 100))}</p>
                                         </div>
                                         <div className="space-y-3">
-                                            <p className="font-medium">Redeem points</p>
-                                            <p className="text-sm text-stone-500">100 points = $1.00 off your order</p>
-                                            <div className="flex items-center gap-4">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setPointsToRedeem((p) => Math.max(0, p - 100))}
-                                                    disabled={pointsToRedeem === 0}
-                                                >
-                                                    <Minus className="h-4 w-4" />
-                                                </Button>
-                                                <span className="w-24 text-center text-2xl font-semibold">{pointsToRedeem} pts</span>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setPointsToRedeem((p) => Math.min(maxRedeemablePoints, p + 100))}
-                                                    disabled={pointsToRedeem >= maxRedeemablePoints}
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            {pointsToRedeem > 0 && (
-                                                <p className="text-sm font-medium text-green-700">
-                                                    {formatCurrency(discount)} discount applied to your order
+                                            <p className="font-medium">Choose a redemption</p>
+                                            <p className="text-sm text-stone-500">Select how you want to spend your points</p>
+
+                                            {/* Flat discount card */}
+                                            <button
+                                                type="button"
+                                                disabled={!flatEligible}
+                                                onClick={() => {
+                                                    if (redemption.kind === "flat") {
+                                                        setRedemption({ kind: "none" });
+                                                        setFlatPoints(0);
+                                                    } else {
+                                                        setFlatPoints(100);
+                                                        setRedemption({ kind: "flat", points: 100 });
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full rounded-xl border p-4 text-left transition-colors",
+                                                    redemption.kind === "flat"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-stone-200 bg-white hover:border-stone-300",
+                                                    !flatEligible && "cursor-not-allowed opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-semibold">Flat Discount</p>
+                                                    <span className="text-sm text-stone-500">100 pts = $1.00 off</span>
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">
+                                                    {!flatEligible ? "Not enough points or empty cart" : "Spend points for dollars off your order"}
                                                 </p>
+                                            </button>
+
+                                            {redemption.kind === "flat" && (
+                                                <div className="flex items-center gap-4 pl-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setFlatPoints((p) => Math.max(100, p - 100))}
+                                                        disabled={flatPoints <= 100}
+                                                    >
+                                                        <Minus className="h-4 w-4" />
+                                                    </Button>
+                                                    <span className="w-24 text-center text-2xl font-semibold">{flatPoints} pts</span>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setFlatPoints((p) => Math.min(maxFlatPoints, p + 100))}
+                                                        disabled={flatPoints >= maxFlatPoints}
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                    <span className="text-sm font-medium text-green-700">
+                                                        {formatCurrency(flatPoints / 100)} off
+                                                    </span>
+                                                </div>
                                             )}
+
+                                            {/* Free add-ons card */}
+                                            <button
+                                                type="button"
+                                                disabled={!addonsEligible}
+                                                onClick={() => {
+                                                    if (redemption.kind === "addons") {
+                                                        setRedemption({ kind: "none" });
+                                                    } else {
+                                                        setFlatPoints(0);
+                                                        setRedemption({ kind: "addons" });
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full rounded-xl border p-4 text-left transition-colors",
+                                                    redemption.kind === "addons"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-stone-200 bg-white hover:border-stone-300",
+                                                    !addonsEligible && "cursor-not-allowed opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-semibold">Add-on Credit</p>
+                                                    <span className="text-sm text-stone-500">{REWARDS_RULES.addons.points} pts</span>
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">
+                                                    {rewardsPoints < REWARDS_RULES.addons.points
+                                                        ? `Need ${REWARDS_RULES.addons.points} pts`
+                                                        : !hasAddons
+                                                            ? `Up to ${formatCurrency(REWARDS_RULES.addons.creditAmount)} off add-ons — add some first`
+                                                            : `Covers ${formatCurrency(Math.min(REWARDS_RULES.addons.creditAmount, cartAddonTotal))} of add-on costs (max ${formatCurrency(REWARDS_RULES.addons.creditAmount)})`}
+                                                </p>
+                                            </button>
+
+                                            {/* Tier 1 card */}
+                                            <button
+                                                type="button"
+                                                disabled={!tier1Eligible}
+                                                onClick={() => {
+                                                    if (redemption.kind === "tier1") {
+                                                        setRedemption({ kind: "none" });
+                                                    } else {
+                                                        setFlatPoints(0);
+                                                        setRedemption({ kind: "tier1" });
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full rounded-xl border p-4 text-left transition-colors",
+                                                    redemption.kind === "tier1"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-stone-200 bg-white hover:border-stone-300",
+                                                    !tier1Eligible && "cursor-not-allowed opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-semibold">{REWARDS_RULES.tier1.percent * 100}% Off</p>
+                                                    <span className="text-sm text-stone-500">{REWARDS_RULES.tier1.points} pts</span>
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">
+                                                    {rewardsPoints < REWARDS_RULES.tier1.points
+                                                        ? `Need ${REWARDS_RULES.tier1.points} pts`
+                                                        : cartTotal < REWARDS_RULES.tier1.minCart
+                                                            ? `Requires cart of $${REWARDS_RULES.tier1.minCart}+`
+                                                            : `Save ${formatCurrency(cartTotal * REWARDS_RULES.tier1.percent)} on this order`}
+                                                </p>
+                                            </button>
+
+                                            {/* Tier 2 card */}
+                                            <button
+                                                type="button"
+                                                disabled={!tier2Eligible}
+                                                onClick={() => {
+                                                    if (redemption.kind === "tier2") {
+                                                        setRedemption({ kind: "none" });
+                                                    } else {
+                                                        setFlatPoints(0);
+                                                        setRedemption({ kind: "tier2" });
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full rounded-xl border p-4 text-left transition-colors",
+                                                    redemption.kind === "tier2"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-stone-200 bg-white hover:border-stone-300",
+                                                    !tier2Eligible && "cursor-not-allowed opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-semibold">{REWARDS_RULES.tier2.percent * 100}% Off</p>
+                                                    <span className="text-sm text-stone-500">{REWARDS_RULES.tier2.points} pts</span>
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">
+                                                    {rewardsPoints < REWARDS_RULES.tier2.points
+                                                        ? `Need ${REWARDS_RULES.tier2.points} pts`
+                                                        : cartTotal < REWARDS_RULES.tier2.minCart
+                                                            ? `Requires cart of $${REWARDS_RULES.tier2.minCart}+`
+                                                            : `Save ${formatCurrency(cartTotal * REWARDS_RULES.tier2.percent)} on this order`}
+                                                </p>
+                                            </button>
                                         </div>
                                         <Button variant="outline" className="w-full" onClick={() => setActiveTab("menu")}>
                                             Back to Menu
@@ -613,7 +790,12 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                     </div>
                                     {discount > 0 && (
                                         <div className="mt-2 flex items-center justify-between text-sm text-green-700">
-                                            <span>Rewards discount ({pointsToRedeem} pts)</span>
+                                            <span>
+                                                {redemption.kind === "flat" && `Rewards: ${resolved.pointsCost} pts`}
+                                                {redemption.kind === "addons" && "Rewards: Add-on credit"}
+                                                {redemption.kind === "tier1" && `Rewards: ${REWARDS_RULES.tier1.percent * 100}% off`}
+                                                {redemption.kind === "tier2" && `Rewards: ${REWARDS_RULES.tier2.percent * 100}% off`}
+                                            </span>
                                             <span>−{formatCurrency(discount)}</span>
                                         </div>
                                     )}
