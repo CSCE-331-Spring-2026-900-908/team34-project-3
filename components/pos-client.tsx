@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt } from "lucide-react";
+import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, MessageCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -71,10 +71,29 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
   const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
   const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
   const [checkoutPending, setCheckoutPending] = useState(false);
+  const [chatbotOpen, setChatbotOpen] = useState(false);
   const [translatorLanguage, setTranslatorLanguage] = useState("en");
   const [modalTranslations, setModalTranslations] = useState<ModalTranslations | null>(null);
   const modalContentRef = useRef<HTMLDivElement | null>(null);
   const paidIngredients = useMemo(() => ingredients.filter((ingredient) => ingredient.addCost > 0), [ingredients]);
+
+  useEffect(() => {
+    if (!chatbotOpen) {
+      return;
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setChatbotOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [chatbotOpen]);
 
   useEffect(() => {
     setTranslatorLanguage(localStorage.getItem("page-translator-language") ?? "en");
@@ -390,11 +409,44 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                 </Button>
               </CardContent>
             </Card>
-            {/* Chatbot under checkout */}
-            <Chatbot cartItems={items} ingredients={ingredients} menuItems={menuItems} />
-
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setChatbotOpen((current) => !current)}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-black px-4 py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-stone-800"
+          aria-label={chatbotOpen ? "Close AI chatbot" : "Open AI chatbot"}
+          aria-expanded={chatbotOpen}
+          aria-controls="cashier-ai-chatbot-popup"
+        >
+          <MessageCircle className="h-5 w-5" />
+          AI Chat
+        </button>
+
+        {chatbotOpen ? (
+          <section
+            id="cashier-ai-chatbot-popup"
+            className="fixed bottom-24 right-4 z-40 w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-[rgb(var(--surface))] shadow-2xl sm:right-6 sm:w-[24rem]"
+            aria-label="Cashier AI chatbot popup"
+          >
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="text-sm font-semibold">AI Chat Assistant</h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setChatbotOpen(false)}
+                aria-label="Close AI chatbot popup"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-3">
+              <Chatbot cartItems={items} ingredients={ingredients} menuItems={menuItems} />
+            </div>
+          </section>
+        ) : null}
 
         {selectedItem ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
