@@ -9,7 +9,10 @@ export type StoredKnowledgeDocument = {
   snippet: string;
   content: string;
   embedding: number[] | null;
+  source: "manual" | "upload";
+  createdByEmployeeId: number | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type StoredChatSummary = {
@@ -73,10 +76,16 @@ export async function ensureManagerCopilotTables() {
           snippet TEXT NOT NULL,
           content TEXT NOT NULL,
           embedding JSONB,
+          source VARCHAR(20) NOT NULL DEFAULT 'manual',
           created_by_employee_id INT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE manager_copilot_documents
+        ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'manual'
       `);
 
       await prisma.$executeRawUnsafe(`
@@ -130,6 +139,7 @@ export async function createKnowledgeDocument(input: {
   content: string;
   snippet: string;
   embedding: number[] | null;
+  source?: "manual" | "upload";
   createdByEmployeeId?: number | null;
 }) {
   await ensureManagerCopilotTables();
@@ -144,9 +154,10 @@ export async function createKnowledgeDocument(input: {
         snippet,
         content,
         embedding,
+        source,
         created_by_employee_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
       RETURNING id
     `,
     id,
@@ -155,6 +166,7 @@ export async function createKnowledgeDocument(input: {
     input.snippet,
     input.content,
     input.embedding ? JSON.stringify(input.embedding) : null,
+    input.source ?? "manual",
     input.createdByEmployeeId ?? null
   );
 
@@ -167,7 +179,7 @@ export async function listKnowledgeDocuments(limit = 50): Promise<StoredKnowledg
   const safeLimit = Math.max(1, Math.min(100, Math.round(limit)));
   const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
     `
-      SELECT id, title, category, snippet, content, embedding, created_at
+      SELECT id, title, category, snippet, content, embedding, source, created_by_employee_id, created_at, updated_at
       FROM manager_copilot_documents
       ORDER BY created_at DESC
       LIMIT $1
@@ -182,10 +194,21 @@ export async function listKnowledgeDocuments(limit = 50): Promise<StoredKnowledg
     snippet: String(row.snippet),
     content: String(row.content),
     embedding: parseEmbedding(row.embedding),
+    source: String(row.source) === "upload" ? "upload" : "manual",
+    createdByEmployeeId:
+      typeof row.created_by_employee_id === "number"
+        ? row.created_by_employee_id
+        : row.created_by_employee_id == null
+          ? null
+          : Number(row.created_by_employee_id),
     createdAt:
       row.created_at instanceof Date
         ? row.created_at.toISOString()
-        : new Date(String(row.created_at)).toISOString()
+        : new Date(String(row.created_at)).toISOString(),
+    updatedAt:
+      row.updated_at instanceof Date
+        ? row.updated_at.toISOString()
+        : new Date(String(row.updated_at)).toISOString()
   }));
 }
 
@@ -194,7 +217,7 @@ export async function listInstructionDocuments() {
 
   const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
     `
-      SELECT id, title, category, snippet, content, embedding, created_at
+      SELECT id, title, category, snippet, content, embedding, source, created_by_employee_id, created_at, updated_at
       FROM manager_copilot_documents
       WHERE category = 'Instruction'
       ORDER BY created_at DESC
@@ -209,11 +232,52 @@ export async function listInstructionDocuments() {
     snippet: String(row.snippet),
     content: String(row.content),
     embedding: parseEmbedding(row.embedding),
+    source: String(row.source) === "upload" ? "upload" : "manual",
+    createdByEmployeeId:
+      typeof row.created_by_employee_id === "number"
+        ? row.created_by_employee_id
+        : row.created_by_employee_id == null
+          ? null
+          : Number(row.created_by_employee_id),
     createdAt:
       row.created_at instanceof Date
         ? row.created_at.toISOString()
-        : new Date(String(row.created_at)).toISOString()
+        : new Date(String(row.created_at)).toISOString(),
+    updatedAt:
+      row.updated_at instanceof Date
+        ? row.updated_at.toISOString()
+        : new Date(String(row.updated_at)).toISOString()
   }));
+}
+
+export async function updateKnowledgeDocument(input: {
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  snippet: string;
+  embedding: number[] | null;
+}) {
+  await ensureManagerCopilotTables();
+
+  await prisma.$executeRawUnsafe(
+    `
+      UPDATE manager_copilot_documents
+      SET title = $2,
+          category = $3,
+          snippet = $4,
+          content = $5,
+          embedding = $6::jsonb,
+          updated_at = NOW()
+      WHERE id = $1
+    `,
+    input.id,
+    input.title,
+    input.category,
+    input.snippet,
+    input.content,
+    input.embedding ? JSON.stringify(input.embedding) : null
+  );
 }
 
 export async function deleteKnowledgeDocument(documentId: string) {

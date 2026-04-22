@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type ToolTraceEntry = {
@@ -70,7 +70,10 @@ type StoredDocument = {
   category: string;
   snippet: string;
   content: string;
+  source: "manual" | "upload";
+  canEdit: boolean;
   createdAt: string;
+  updatedAt: string;
 };
 
 type StoredChat = {
@@ -92,7 +95,7 @@ const documentCategories = ["Instruction", "Manager Note", "SOP", "Vendor", "Pro
 const initialAssistantMessage: Message = {
   role: "assistant",
   content:
-    "Store Advisor is ready. Ask about sales trends, item performance, inventory risk, SQL-backed analytics, or charts and I will ground the answer in live manager data.",
+    "Copilot is ready. Ask about sales trends, item performance, inventory risk, data analytics, or charts and I will ground the answer in live manager data.",
   reasoningSummary:
     "This assistant can call manager data tools, run guarded read-only SQL, retrieve embedded manager documents, and attach chart images or structured artifacts when useful."
 };
@@ -198,9 +201,44 @@ export function ManagerCopilotClient() {
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<StoredDocument | null>(null);
   const [documentTitle, setDocumentTitle] = useState("");
   const [documentCategory, setDocumentCategory] = useState<(typeof documentCategories)[number]>("Instruction");
   const [documentContent, setDocumentContent] = useState("");
+  const [documentSource, setDocumentSource] = useState<"manual" | "upload">("manual");
+
+  const isDocumentEditing = editingDocumentId !== null;
+
+  function resetDocumentForm() {
+    setEditingDocumentId(null);
+    setDocumentTitle("");
+    setDocumentContent("");
+    setDocumentCategory("Instruction");
+    setDocumentSource("manual");
+  }
+
+  function openNewDocumentModal() {
+    resetDocumentForm();
+    setSelectedDocument(null);
+    setIsUploadModalOpen(true);
+  }
+
+  function openDocument(document: StoredDocument) {
+    setSelectedDocument(document);
+    setIsUploadModalOpen(false);
+  }
+
+  function beginEditingDocument(document: StoredDocument) {
+    setSelectedDocument(null);
+    setEditingDocumentId(document.id);
+    setDocumentTitle(document.title);
+    setDocumentCategory(document.category as (typeof documentCategories)[number]);
+    setDocumentContent(document.content);
+    setDocumentSource(document.source);
+    setSidebarTab("docs");
+    setIsUploadModalOpen(true);
+  }
 
   async function loadSidebarData() {
     setIsLoadingSidebar(true);
@@ -277,14 +315,16 @@ export function ManagerCopilotClient() {
 
     try {
       const response = await fetch("/api/manager/copilot/docs", {
-        method: "POST",
+        method: editingDocumentId ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
+          id: editingDocumentId,
           title,
           category: documentCategory,
-          content
+          content,
+          source: documentSource
         })
       });
 
@@ -295,10 +335,12 @@ export function ManagerCopilotClient() {
         return;
       }
 
-      toast.success("Manager document saved and embedded for future copilot calls.");
-      setDocumentTitle("");
-      setDocumentContent("");
-      setDocumentCategory("Instruction");
+      toast.success(
+        editingDocumentId
+          ? "Manager document updated."
+          : "Manager document saved and embedded for future copilot calls."
+      );
+      resetDocumentForm();
       setIsUploadModalOpen(false);
       await loadSidebarData();
     } catch {
@@ -325,6 +367,9 @@ export function ManagerCopilotClient() {
 
       setDocumentTitle(file.name.replace(/\.[^.]+$/, ""));
       setDocumentContent(content);
+      setDocumentSource("upload");
+      setEditingDocumentId(null);
+      setSelectedDocument(null);
       setSidebarTab("docs");
       setIsUploadModalOpen(true);
       toast.success("Document loaded into the upload form.");
@@ -518,7 +563,7 @@ export function ManagerCopilotClient() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-foreground">Reference Documents</p>
                     </div>
-                    <Button type="button" className="shrink-0" onClick={() => setIsUploadModalOpen(true)}>
+                    <Button type="button" className="shrink-0" onClick={openNewDocumentModal}>
                       <Upload className="mr-2 h-4 w-4" />
                       Add Document
                     </Button>
@@ -543,15 +588,26 @@ export function ManagerCopilotClient() {
                           <X className="h-3.5 w-3.5" />
                         )}
                       </Button>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">{document.title}</p>
-                          <p className="mt-1 text-xs text-stone-500">{formatTimestamp(document.createdAt)}</p>
+                      <button
+                        type="button"
+                        onClick={() => openDocument(document)}
+                        className="block w-full text-left"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">{document.title}</p>
+                            <p className="mt-1 text-xs text-stone-500">
+                              {formatTimestamp(document.createdAt)}
+                              {document.updatedAt !== document.createdAt
+                                ? ` | Edited ${formatTimestamp(document.updatedAt)}`
+                                : ""}
+                            </p>
+                          </div>
+                          <Badge className="border-border bg-[rgb(var(--surface-alt))] text-stone-700">
+                            {document.category}
+                          </Badge>
                         </div>
-                        <Badge className="border-border bg-[rgb(var(--surface-alt))] text-stone-700">
-                          {document.category}
-                        </Badge>
-                      </div>
+                      </button>
                     </div>
                   ))}
 
@@ -636,7 +692,7 @@ export function ManagerCopilotClient() {
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">Manager Copilot</p>
                 <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
-                  Analytics, RAG, saved context, and artifact-style responses
+                  Analytics, Briefs, Charts, and Advice
                 </h2>
               </div>
             </div>
@@ -910,13 +966,78 @@ export function ManagerCopilotClient() {
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
-              <Button type="button" variant="outline" onClick={() => setIsUploadModalOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsUploadModalOpen(false);
+                  resetDocumentForm();
+                }}
+              >
                 Cancel
               </Button>
               <Button type="button" onClick={() => void saveDocument()} disabled={isSavingDocument}>
                 {isSavingDocument ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save And Embed
+                {isDocumentEditing ? "Save Changes" : "Save And Embed"}
               </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedDocument ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6">
+          <div className="w-full max-w-3xl rounded-[2rem] border border-border bg-[rgb(var(--surface))] shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">Reference Document</p>
+                <h2 className="mt-1 truncate text-xl font-semibold tracking-tight text-foreground">
+                  {selectedDocument.title}
+                </h2>
+                <p className="mt-2 text-sm text-stone-500">
+                  {selectedDocument.category} | Added {formatTimestamp(selectedDocument.createdAt)}
+                  {selectedDocument.updatedAt !== selectedDocument.createdAt
+                    ? ` | Edited ${formatTimestamp(selectedDocument.updatedAt)}`
+                    : ""}
+                </p>
+              </div>
+              <Button type="button" variant="outline" size="icon" onClick={() => setSelectedDocument(null)} aria-label="Close document">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="border-border bg-[rgb(var(--surface-alt))] text-stone-700">
+                  {selectedDocument.category}
+                </Badge>
+                <Badge className="border-border bg-white text-stone-600">
+                  {selectedDocument.source === "manual" ? "Written in editor" : "Uploaded from file"}
+                </Badge>
+                {!selectedDocument.canEdit ? (
+                  <p className="text-sm text-stone-500">
+                    This document can be opened here, but only manually written documents you created can be edited.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap rounded-2xl border border-border bg-[rgb(var(--surface-alt))] px-4 py-3 text-sm leading-6 text-foreground">
+                {selectedDocument.content}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+              <Button type="button" variant="outline" onClick={() => setSelectedDocument(null)}>
+                Close
+              </Button>
+              {selectedDocument.canEdit ? (
+                <Button
+                  type="button"
+                  onClick={() => beginEditingDocument(selectedDocument)}
+                >
+                  Edit Document
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
