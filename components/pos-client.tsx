@@ -62,9 +62,11 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
   const items = useOrderStore((state) => state.items);
   const addItem = useOrderStore((state) => state.addItem);
   const removeItem = useOrderStore((state) => state.removeItem);
+  const updateItem = useOrderStore((state) => state.updateItem);
   const clear = useOrderStore((state) => state.clear);
 
   const [selectedItem, setSelectedItem] = useState<MenuItemRecord | null>(null);
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [sweetness, setSweetness] = useState<(typeof sweetnessOptions)[number]>(100);
   const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
@@ -202,6 +204,43 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
 
   function closeModal() {
     setSelectedItem(null);
+    setEditingItemIndex(null);
+  }
+
+  function openAddItemModal(item: MenuItemRecord) {
+    setEditingItemIndex(null);
+    setSelectedItem(item);
+  }
+
+  function openEditItemModal(index: number) {
+    const cartItem = items[index];
+
+    if (!cartItem) {
+      return;
+    }
+
+    const menuItem = menuItems.find((item) => item.id === cartItem.itemId);
+
+    if (!menuItem) {
+      toast.error("This menu item is no longer available to edit.");
+      return;
+    }
+
+    setEditingItemIndex(index);
+    setSelectedItem(menuItem);
+    setQuantity(cartItem.quantity);
+    setSweetness(
+      sweetnessOptions.includes(cartItem.sweetness as (typeof sweetnessOptions)[number])
+        ? (cartItem.sweetness as (typeof sweetnessOptions)[number])
+        : 100
+    );
+    setIce([0, 1, 2, 3].includes(cartItem.ice) ? (cartItem.ice as 0 | 1 | 2 | 3) : 2);
+    setSelectedIngredients(
+      cartItem.ingredientChoices.reduce<SelectedIngredientState>((accumulator, choice) => {
+        accumulator[choice.ingredientId] = choice.quantity;
+        return accumulator;
+      }, {})
+    );
   }
 
   function updateIngredient(id: number, delta: number) {
@@ -225,26 +264,31 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
       return;
     }
 
-    const ingredientChoices = paidIngredients
-      .filter((ingredient) => (selectedIngredients[ingredient.id] ?? 0) > 0)
-      .map((ingredient) => ({
-        ingredientId: ingredient.id,
-        quantity: selectedIngredients[ingredient.id] ?? 0,
-        addCost: ingredient.addCost,
-        name: ingredient.name
-      }));
-
-    addItem({
+    const nextItem = {
       itemId: selectedItem.id,
       itemName: selectedItem.name,
       quantity,
       sweetness,
       ice,
-      ingredientChoices,
+      ingredientChoices: ingredients
+        .filter((ingredient) => (selectedIngredients[ingredient.id] ?? 0) > 0)
+        .map((ingredient) => ({
+          ingredientId: ingredient.id,
+          quantity: selectedIngredients[ingredient.id] ?? 0,
+          addCost: ingredient.addCost,
+          name: ingredient.name
+        })),
       cost: lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients)
-    });
+    };
 
-    toast.success(`${selectedItem.name} added to cart.`);
+    if (editingItemIndex !== null) {
+      updateItem(editingItemIndex, nextItem);
+      toast.success(`${selectedItem.name} updated.`);
+    } else {
+      addItem(nextItem);
+      toast.success(`${selectedItem.name} added to cart.`);
+    }
+
     closeModal();
   }
 
@@ -315,7 +359,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => setSelectedItem(item)}
+                      onClick={() => openAddItemModal(item)}
                       className="rounded-xl border border-border bg-[rgb(var(--surface-alt))] p-5 text-left transition hover:bg-white"
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -345,7 +389,12 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                     </div>
                   ) : (
                     items.map((item, index) => (
-                      <div key={`${item.itemId}-${index}`} className="rounded-xl border border-border bg-[rgb(var(--surface-alt))] p-4">
+                      <button
+                        key={`${item.itemId}-${index}`}
+                        type="button"
+                        onClick={() => openEditItemModal(index)}
+                        className="w-full rounded-xl border border-border bg-[rgb(var(--surface-alt))] p-4 text-left transition hover:bg-white"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="font-semibold">{item.itemName}</div>
@@ -362,12 +411,19 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                             <div className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">
                               {formatCurrency(item.cost)}
                             </div>
-                            <Button variant="ghost" size="sm" onClick={() => removeItem(index)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                removeItem(index);
+                              }}
+                            >
                               Remove
                             </Button>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     ))
                   )}
                 </div>
@@ -542,7 +598,9 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                   <Button variant="outline" onClick={closeModal}>
                     {modalTranslations?.cancel ?? "Cancel"}
                   </Button>
-                  <Button onClick={addSelectedItem}>{modalTranslations?.addToCart ?? "Add to Cart"}</Button>
+                  <Button onClick={addSelectedItem}>
+                    {editingItemIndex !== null ? "Save Changes" : modalTranslations?.addToCart ?? "Add to Cart"}
+                  </Button>
                 </div>
               </div>
             </div>

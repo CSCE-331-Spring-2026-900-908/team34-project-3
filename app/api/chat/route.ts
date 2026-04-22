@@ -67,8 +67,43 @@ type ChatAction =
       }>;
     };
 
+const validSweetnessLevels = [0, 25, 50, 75, 100] as const;
+const validIceLevels = [0, 1, 2, 3] as const;
+
 function formatMoney(amount: number) {
   return `$${amount.toFixed(2)}`;
+}
+
+function userSpecifiedSweetness(message: string) {
+  return /\b(sweet|sweetness|sugar)\b/i.test(message);
+}
+
+function userSpecifiedIce(message: string) {
+  return /\bice\b/i.test(message);
+}
+
+function normalizeAction(action: ChatAction | undefined, message: string): ChatAction {
+  if (!action || action.type === "none") {
+    return { type: "none" };
+  }
+
+  if (action.type === "edit_cart_item") {
+    return action;
+  }
+
+  const sweetnessSource = userSpecifiedSweetness(message) ? action.sweetness : 100;
+  const normalizedSweetness = validSweetnessLevels.includes(sweetnessSource as (typeof validSweetnessLevels)[number])
+    ? sweetnessSource
+    : 100;
+
+  const iceSource = userSpecifiedIce(message) ? action.ice : 2;
+  const normalizedIce = validIceLevels.includes(iceSource as (typeof validIceLevels)[number]) ? iceSource : 2;
+
+  return {
+    ...action,
+    sweetness: normalizedSweetness,
+    ice: normalizedIce
+  };
 }
 
 function describeIceLevel(ice: number) {
@@ -181,7 +216,8 @@ export async function POST(req: NextRequest) {
       "You may help edit an existing cart drink by returning an edit_cart_item action when the user clearly asks to change a drink already in the cart.",
       "Use the provided cart line number to target the correct existing drink.",
       "Only use exact menu item names and exact extra ingredient names from the provided lists.",
-      "If details like sweetness, ice, quantity, or extras are not specified, use sensible defaults: quantity 1, sweetness 100, ice 2, extras [].",
+      "When creating add_to_cart actions, assume sweetness 100 and ice 2 (regular ice) unless the user explicitly asks for different sweetness or ice.",
+      "If details like quantity or extras are not specified, use sensible defaults: quantity 1 and extras [].",
       "If the user is ambiguous about which drink to add, ask a follow-up question instead of creating an action.",
       "If the user is ambiguous about which cart item to edit, ask a follow-up question instead of creating an action.",
       "Do not invent unavailable products or claim to complete payment, modify inventory, or place orders yourself.",
@@ -248,13 +284,13 @@ export async function POST(req: NextRequest) {
     }
 
     const reply = parsed?.reply?.trim();
-    const action = parsed?.action;
+    const action = normalizeAction(parsed?.action, message);
 
     return NextResponse.json({
       reply:
         reply ??
         "I can help with drinks, toppings, cart questions, and boba suggestions. What would you like to order?",
-      action: action?.type === "add_to_cart" || action?.type === "edit_cart_item" ? action : { type: "none" }
+      action
     });
   } catch {
     return NextResponse.json(

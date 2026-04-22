@@ -10,6 +10,7 @@ const managerNavLinks: ManagerNavLink[] = [
   { href: "/manager/inventory" as Route, label: "Inventory" },
   { href: "/manager/employees" as Route, label: "Employees" },
   { href: "/manager/menu-items" as Route, label: "Menu Items" },
+  { href: "/manager/insights" as Route, label: "Copilot" },
   { href: "/manager/x-report" as Route, label: "X Report" },
   { href: "/manager/z-report" as Route, label: "Z Report" }
 ];
