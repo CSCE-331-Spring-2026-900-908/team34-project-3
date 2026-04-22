@@ -125,6 +125,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [searchQuery, setSearchQuery] = useState("");
     const [activeCategory, setActiveCategory] = useState("All");
     const [searchKeyboardOpen, setSearchKeyboardOpen] = useState(false);
+    const [chatKeyboardOpen, setChatKeyboardOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<"menu" | "rewards">("menu");
     const [rewardsPoints, setRewardsPoints] = useState(0);
     const [redemption, setRedemption] = useState<Redemption>({ kind: "none" });
@@ -269,6 +270,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
 
     useEffect(() => {
         if (!chatbotOpen) {
+            setChatKeyboardOpen(false);
             return;
         }
 
@@ -361,6 +363,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             return matchesCategory && matchesSearch;
         });
     }, [activeCategory, menuItems, searchQuery]);
+    const keyboardOpen = searchKeyboardOpen || chatKeyboardOpen;
 
     // All the functions (closeModal, updateIngredient, addSelectedItem, handleCheckout) are
     // IDENTICAL to pos-client.tsx [4], copy them here.
@@ -512,7 +515,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             <SkipLink />
             {/* --- REPURPOSED FOR KIOSK (Main Layout) --- */}
             <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen bg-stone-100">
-                <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8", searchKeyboardOpen && "pb-[32rem]")}>
+                <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8", keyboardOpen && "pb-[32rem]")}>
 
                     {/* --- REPURPOSED FOR KIOSK (Header) --- */}
                     {/* We replace the employee-specific header with a customer welcome message. */}
@@ -895,7 +898,10 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 <button
                     type="button"
                     onClick={() => setChatbotOpen((current) => !current)}
-                    className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-blue-800"
+                    className={cn(
+                        "fixed right-6 z-50 flex items-center gap-2 rounded-full bg-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-blue-800",
+                        keyboardOpen ? "bottom-[calc(min(56vh,32rem)+1rem)]" : "bottom-6"
+                    )}
                     aria-label={chatbotOpen ? "Close AI chatbot" : "Open AI chatbot"}
                     aria-expanded={chatbotOpen}
                     aria-controls="kiosk-ai-chatbot-popup"
@@ -907,7 +913,10 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 {chatbotOpen ? (
                     <section
                         id="kiosk-ai-chatbot-popup"
-                        className="fixed bottom-24 right-4 z-40 w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-stone-200 bg-white shadow-2xl sm:right-6 sm:w-[24rem]"
+                        className={cn(
+                            "fixed right-4 z-50 w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-stone-200 bg-white shadow-2xl sm:right-6 sm:w-[24rem]",
+                            keyboardOpen ? "bottom-[calc(min(56vh,32rem)+6rem)]" : "bottom-24"
+                        )}
                         aria-label="Kiosk AI chatbot popup"
                     >
                         <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
@@ -923,7 +932,12 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                             </Button>
                         </div>
                         <div className="p-3">
-                            <Chatbot cartItems={items} ingredients={ingredients} menuItems={menuItems} />
+                            <Chatbot
+                                cartItems={items}
+                                ingredients={ingredients}
+                                menuItems={menuItems}
+                                onKeyboardOpenChange={setChatKeyboardOpen}
+                            />
                         </div>
                     </section>
                 ) : null}

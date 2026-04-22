@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { TouchscreenInput } from "@/components/touchscreen-input";
 import { useOrderStore } from "@/lib/stores/order-store";
 import type { IngredientRecord, MenuItemRecord, OrderItemInput } from "@/lib/types";
 
@@ -10,6 +11,7 @@ type ChatbotProps = {
   cartItems: OrderItemInput[];
   ingredients: IngredientRecord[];
   menuItems: MenuItemRecord[];
+  onKeyboardOpenChange?: (open: boolean) => void;
 };
 
 type WeatherContext = {
@@ -53,7 +55,7 @@ function normalizeName(value: string) {
   return value.trim().toLowerCase();
 }
 
-export default function Chatbot({ cartItems, ingredients, menuItems }: ChatbotProps) {
+export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardOpenChange }: ChatbotProps) {
   const addItem = useOrderStore((state) => state.addItem);
   const updateItem = useOrderStore((state) => state.updateItem);
   const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([]);
@@ -279,28 +281,32 @@ export default function Chatbot({ cartItems, ingredients, menuItems }: ChatbotPr
 
   return (
     <div className="border rounded-lg p-3 flex flex-col gap-2 bg-white shadow">
-      <div className="h-40 overflow-y-auto border p-2 rounded bg-gray-50">
+      <div className="h-40 overflow-y-auto rounded border bg-gray-50 p-2">
         {messages.map((m, i) => (
-          <div
-            key={i}
-            className={m.from === "user" ? "text-right text-blue-600" : "text-left text-green-700"}
-          >
-            {m.text}
+          <div key={i} className={`mb-2 flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
+            <p
+              className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                m.from === "user" ? "border border-stone-200 bg-white text-black" : "bg-black text-white"
+              }`}
+            >
+              {m.text}
+            </p>
           </div>
         ))}
       </div>
 
       <div className="flex gap-2">
-        <input
+        <TouchscreenInput
           className="flex-1 border rounded p-2"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onValueChange={setInput}
+          onKeyboardOpenChange={onKeyboardOpenChange}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               void sendMessage();
             }
           }}
-          placeholder="Ask something…"
+          placeholder="Ask something..."
         />
         <button
           onClick={() => void sendMessage()}
