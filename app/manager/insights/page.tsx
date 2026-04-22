@@ -24,7 +24,7 @@ export default async function ManagerInsightsPage() {
             icon={<Bot className="h-7 w-7" />}
             sectionLabel="Intelligence"
             title="Manager Copilot"
-            subtitle="Ask grounded questions about sales, item trends, inventory, and broader manager analytics."
+            subtitle="Your AI assistant for sales, item trends, inventory, manager analytics, and decision making."
             employeeBadge={`${employee.fullName} (Manager)`}
             links={getManagerNavLinks("/manager/insights" as Route)}
           />

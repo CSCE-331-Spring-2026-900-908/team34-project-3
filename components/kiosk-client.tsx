@@ -437,20 +437,13 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 name: ingredient.name
             }));
 
-        addItem({
+        const nextItem = {
             itemId: selectedItem.id,
             itemName: selectedItem.name,
             quantity,
             sweetness,
             ice,
-            ingredientChoices: ingredients
-                .filter((ingredient) => (selectedIngredients[ingredient.id] ?? 0) > 0)
-                .map((ingredient) => ({
-                    ingredientId: ingredient.id,
-                    quantity: selectedIngredients[ingredient.id] ?? 0,
-                    addCost: ingredient.addCost,
-                    name: ingredient.name
-                })),
+            ingredientChoices,
             cost: lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients)
         };
 
