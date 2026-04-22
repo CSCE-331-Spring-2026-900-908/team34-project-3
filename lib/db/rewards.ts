@@ -63,7 +63,7 @@ export async function getOrCreateRewards(
 
   const rows = await prisma.$queryRaw<CustomerRewardsRow[]>`
     INSERT INTO customer_rewards (google_id, email, full_name, points, created_at, updated_at)
-    VALUES (${googleId}, ${email}, ${fullName}, 0, NOW(), NOW())
+    VALUES (${googleId}, ${email}, ${fullName}, 100, NOW(), NOW())
     ON CONFLICT (google_id) DO UPDATE SET
       email = EXCLUDED.email,
       full_name = EXCLUDED.full_name,

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getOrCreateRewards } from "@/lib/db/rewards";
 import type { SessionCustomer, SessionEmployee } from "@/lib/types";
 
 type GoogleProfile = {
@@ -116,6 +117,8 @@ export async function resolveGoogleUser(profile: GoogleProfile): Promise<{
     lastName: authUser.lastName,
     picture: authUser.picture ?? undefined
   };
+
+  await getOrCreateRewards(googleId, authUser.email, authUser.fullName);
 
   if (!authUser.employeeId) {
     return { customer, employee: null };
