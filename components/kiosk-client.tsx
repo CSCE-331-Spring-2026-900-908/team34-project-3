@@ -2,7 +2,7 @@
 
 // --- REPURPOSED FOR KIOSK (Imports) ---
 // We keep most imports. We just need to update the types we use.
-import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search } from "lucide-react";
+import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search, MessageCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -133,6 +133,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
     const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
     const [checkoutPending, setCheckoutPending] = useState(false);
+    const [chatbotOpen, setChatbotOpen] = useState(false);
     const [translatorLanguage, setTranslatorLanguage] = useState("en");
     const [modalTranslations, setModalTranslations] = useState<ModalTranslations | null>(null);
     const modalContentRef = useRef<HTMLDivElement | null>(null);
@@ -261,6 +262,24 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         };
     }, [paidIngredients, selectedItem, translatorLanguage]);
     // End of copied block from POS //
+
+    useEffect(() => {
+        if (!chatbotOpen) {
+            return;
+        }
+
+        function handleEscape(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                setChatbotOpen(false);
+            }
+        }
+
+        window.addEventListener("keydown", handleEscape);
+
+        return () => {
+            window.removeEventListener("keydown", handleEscape);
+        };
+    }, [chatbotOpen]);
 
     useEffect(() => {
         fetch("/api/rewards")
@@ -605,7 +624,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                     {discount > 0 && (
                                         <div className="mt-2 flex items-center justify-between text-sm text-green-700">
                                             <span>Rewards discount ({pointsToRedeem} pts)</span>
-                                            <span>−{formatCurrency(discount)}</span>
+                                            <span>-{formatCurrency(discount)}</span>
                                         </div>
                                     )}
                                     <div className="mt-4 flex items-end justify-between gap-4">
@@ -622,6 +641,42 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         </Card>
                     </div>
                 </div>
+
+                <button
+                    type="button"
+                    onClick={() => setChatbotOpen((current) => !current)}
+                    className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-blue-800"
+                    aria-label={chatbotOpen ? "Close AI chatbot" : "Open AI chatbot"}
+                    aria-expanded={chatbotOpen}
+                    aria-controls="kiosk-ai-chatbot-popup"
+                >
+                    <MessageCircle className="h-5 w-5" />
+                    AI Chat
+                </button>
+
+                {chatbotOpen ? (
+                    <section
+                        id="kiosk-ai-chatbot-popup"
+                        className="fixed bottom-24 right-4 z-40 w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-stone-200 bg-white shadow-2xl sm:right-6 sm:w-[24rem]"
+                        aria-label="Kiosk AI chatbot popup"
+                    >
+                        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
+                            <h2 className="text-sm font-semibold">AI Chat Assistant</h2>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setChatbotOpen(false)}
+                                aria-label="Close AI chatbot popup"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <div className="p-3">
+                            <Chatbot cartItems={items} ingredients={ingredients} menuItems={menuItems} />
+                        </div>
+                    </section>
+                ) : null}
 
                 {/* --- REPURPOSED FOR KIOSK (Customization Modal) --- */}
                 {/* This modal logic is IDENTICAL to PosClient [4]. It will appear when `selectedItem` is set. */}
