@@ -6,8 +6,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import {
   ManagerFilterBar,
   ManagerPaneHeader,
-  ManagerScrollArea,
-  ManagerStatsStrip
+  ManagerScrollArea
 } from "@/components/manager-primitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,10 +43,6 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
       recommendedRestockQty: criticalMap.get(ing.id)?.recommendedRestockQty
     }));
   }, [allIngredients, criticalIngredients]);
-  const pendingOrders = useMemo(
-    () => orders.filter((order) => order.status !== "confirmed").length,
-    [orders]
-  );
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (!deferredOrderQuery) {
@@ -80,18 +75,9 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
   }, [deferredIngredientQuery, sortedIngredients]);
 
   return (
-    <div className="space-y-6">
-      <ManagerStatsStrip
-        stats={[
-          { label: "Total Ingredients", value: allIngredients.length },
-          { label: "Critical Ingredients", value: criticalIngredients.length },
-          { label: "Pending Orders", value: pendingOrders }
-        ]}
-      />
-
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Left: Previous orders */}
-        <section className="space-y-4">
+    <div className="grid gap-8 lg:grid-cols-2">
+      {/* Left: Previous orders */}
+      <section className="space-y-4">
           <ManagerPaneHeader
             title="Previous Orders"
             action={(
@@ -160,10 +146,10 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
               )}
             </ManagerScrollArea>
           )}
-        </section>
+      </section>
 
-        {/* Right: All ingredients sorted by criticality */}
-        <section className="space-y-4">
+      {/* Right: All ingredients sorted by criticality */}
+      <section className="space-y-4">
           <ManagerPaneHeader title="Ingredient Stock Levels" />
 
           <ManagerFilterBar>
@@ -222,8 +208,7 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
               )}
             </ManagerScrollArea>
           )}
-        </section>
-      </div>
+      </section>
     </div>
   );
 }

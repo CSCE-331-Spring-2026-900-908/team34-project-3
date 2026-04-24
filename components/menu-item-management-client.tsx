@@ -8,8 +8,7 @@ import { toast } from "sonner";
 import {
   ManagerFilterBar,
   ManagerPaneHeader,
-  ManagerScrollArea,
-  ManagerStatsStrip
+  ManagerScrollArea
 } from "@/components/manager-primitives";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,17 +34,6 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
-  const itemsMissingIngredients = useMemo(
-    () => menuItems.filter((item) => Object.keys(item.ingredients).length === 0).length,
-    [menuItems]
-  );
-  const averagePrice = useMemo(() => {
-    if (menuItems.length === 0) {
-      return 0;
-    }
-
-    return menuItems.reduce((sum, item) => sum + item.cost, 0) / menuItems.length;
-  }, [menuItems]);
   const filteredItems = useMemo(() => {
     return menuItems.filter((item) => {
       if (!deferredQuery) {
@@ -162,18 +150,9 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <ManagerStatsStrip
-        stats={[
-          { label: "Total Items", value: menuItems.length },
-          { label: "Missing Ingredients", value: itemsMissingIngredients },
-          { label: "Average Price", value: formatCurrency(averagePrice) }
-        ]}
-      />
-
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Left: Menu item list */}
-        <section className="space-y-4">
+    <div className="grid gap-8 lg:grid-cols-2">
+      {/* Left: Menu item list */}
+      <section className="space-y-4">
           <ManagerPaneHeader
             title="Menu Items"
             action={(
@@ -221,10 +200,10 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
               ))
             )}
           </ManagerScrollArea>
-        </section>
+      </section>
 
-        {/* Right: Menu item form */}
-        <section>
+      {/* Right: Menu item form */}
+      <section>
           <Card>
             <CardHeader>
               <CardTitle>
@@ -324,8 +303,7 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
               </form>
             </CardContent>
           </Card>
-        </section>
-      </div>
+      </section>
     </div>
   );
 }

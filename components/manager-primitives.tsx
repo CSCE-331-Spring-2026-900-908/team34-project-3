@@ -1,18 +1,6 @@
 import type { ReactNode, SelectHTMLAttributes } from "react";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-export type ManagerStat = {
-  label: string;
-  value: ReactNode;
-  meta?: ReactNode;
-};
-
-type ManagerStatsStripProps = {
-  stats: ManagerStat[];
-  className?: string;
-};
 
 type ManagerPaneHeaderProps = {
   title: string;
@@ -30,22 +18,6 @@ type ManagerFilterBarProps = {
   children: ReactNode;
   className?: string;
 };
-
-export function ManagerStatsStrip({ stats, className }: ManagerStatsStripProps) {
-  return (
-    <div className={cn("mb-6 grid gap-3 md:grid-cols-3", className)}>
-      {stats.map((stat) => (
-        <Card key={stat.label} className="rounded-2xl">
-          <CardContent className="px-5 py-4">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{stat.label}</p>
-            <p className="mt-1 text-xl font-semibold text-foreground">{stat.value}</p>
-            {stat.meta ? <p className="mt-1 text-sm text-stone-500">{stat.meta}</p> : null}
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
 
 export function ManagerPaneHeader({ title, subtitle, action, className }: ManagerPaneHeaderProps) {
   return (

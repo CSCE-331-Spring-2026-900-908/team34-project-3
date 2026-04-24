@@ -8,8 +8,7 @@ import {
   ManagerFilterBar,
   ManagerPaneHeader,
   ManagerScrollArea,
-  ManagerSelect,
-  ManagerStatsStrip
+  ManagerSelect
 } from "@/components/manager-primitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,14 +34,6 @@ export function EmployeeManagementClient({ employees }: Props) {
   const [roleFilter, setRoleFilter] = useState<"all" | "manager" | "cashier">("all");
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
-  const managerCount = useMemo(
-    () => employees.filter((employee) => employee.isManager).length,
-    [employees]
-  );
-  const pendingOauthCount = useMemo(
-    () => employees.filter((employee) => !employee.hasGoogleAccount).length,
-    [employees]
-  );
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
       const matchesRole =
@@ -158,18 +149,9 @@ export function EmployeeManagementClient({ employees }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <ManagerStatsStrip
-        stats={[
-          { label: "Total Employees", value: employees.length },
-          { label: "Managers", value: managerCount },
-          { label: "Awaiting OAuth", value: pendingOauthCount }
-        ]}
-      />
-
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Left: Employee list */}
-        <section className="space-y-4">
+    <div className="grid gap-8 lg:grid-cols-2">
+      {/* Left: Employee list */}
+      <section className="space-y-4">
           <ManagerPaneHeader
             title="Employees"
             action={(
@@ -230,10 +212,10 @@ export function EmployeeManagementClient({ employees }: Props) {
               ))
             )}
           </ManagerScrollArea>
-        </section>
+      </section>
 
-        {/* Right: Employee form */}
-        <section>
+      {/* Right: Employee form */}
+      <section>
           <Card>
             <CardHeader>
               <CardTitle>
@@ -309,8 +291,7 @@ export function EmployeeManagementClient({ employees }: Props) {
               </form>
             </CardContent>
           </Card>
-        </section>
-      </div>
+      </section>
     </div>
   );
 }
