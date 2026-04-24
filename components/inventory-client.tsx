@@ -50,12 +50,12 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
         {orders.length === 0 ? (
           <p className="text-sm italic text-stone-500">No previous orders found.</p>
         ) : (
-          <div className="max-h-[600px] space-y-3 overflow-y-auto pr-1">
+          <div className="max-h-[600px] space-y-2.5 overflow-y-auto pr-1">
             {orders.map((order) => {
               const confirmed = order.status === "confirmed";
               return (
                 <Card key={order.id}>
-                  <CardContent className="flex items-center justify-between gap-4 p-5 sm:p-6">
+                  <CardContent className="flex items-center justify-between gap-3 px-5 py-4 sm:px-6 sm:py-5">
                     <div className="space-y-1">
                       <p className="font-semibold">
                         Order #{order.id} -{" "}
@@ -67,7 +67,7 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
                       </p>
                       <p className="text-sm text-stone-500">{order.items.length} item(s)</p>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <Badge
                         className={
                           confirmed
@@ -100,26 +100,41 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
         {sortedIngredients.length === 0 ? (
           <p className="text-sm italic text-stone-500">No ingredients found.</p>
         ) : (
-          <div className="max-h-[600px] space-y-3 overflow-y-auto pr-1">
-            {sortedIngredients.map((ing) => (
-              <Card key={ing.id} className={ing.isCritical ? "border-red-200" : ""}>
-                <CardContent className="space-y-1 p-5 sm:p-6">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold">{ing.name}</p>
-                    {ing.isCritical ? (
-                      <Badge className="border-red-300 text-red-600">Critical</Badge>
-                    ) : null}
-                  </div>
-                  <p className="text-sm text-stone-500">
-                    Current stock: {ing.servingsAvailable} servings
-                  </p>
+          <div className="max-h-[600px] overflow-y-auto rounded-[1.75rem] border border-border bg-[rgb(var(--surface))] shadow-[0_18px_38px_rgba(83,54,37,0.08)]">
+            <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,1fr)] gap-3 border-b border-border px-5 py-3 text-xs font-bold uppercase tracking-[0.18em] text-stone-500 sm:px-6">
+              <span>Ingredient</span>
+              <span>Stock</span>
+              <span>Status</span>
+            </div>
+
+            {sortedIngredients.map((ing, index) => (
+              <div
+                key={ing.id}
+                className={`grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,1fr)] gap-3 px-5 py-3 sm:px-6 ${
+                  index !== sortedIngredients.length - 1 ? "border-b border-border" : ""
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold">{ing.name}</p>
                   {ing.isCritical && ing.recommendedRestockQty != null ? (
-                    <p className="text-sm text-red-600">
-                      Recommended restock: {ing.recommendedRestockQty} units
+                    <p className="mt-1 text-sm text-red-600">
+                      Restock {ing.recommendedRestockQty} units
                     </p>
                   ) : null}
-                </CardContent>
-              </Card>
+                </div>
+
+                <div className="text-sm text-stone-600">
+                  {ing.servingsAvailable} servings
+                </div>
+
+                <div className="flex items-start">
+                  {ing.isCritical ? (
+                    <Badge className="border-red-300 text-red-600">Critical</Badge>
+                  ) : (
+                    <span className="text-sm text-stone-500">OK</span>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         )}
