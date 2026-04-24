@@ -36,7 +36,6 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
 
   return (
     <div className="grid gap-8 lg:grid-cols-2">
-
       {/* Left: Previous orders */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
@@ -51,42 +50,44 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
         {orders.length === 0 ? (
           <p className="text-sm italic text-stone-500">No previous orders found.</p>
         ) : (
-          orders.map((order) => {
-            const confirmed = order.status === "confirmed";
-            return (
-              <Card key={order.id}>
-                <CardContent className="flex items-center justify-between gap-4 p-5 sm:p-6">
-                  <div className="space-y-1">
-                    <p className="font-semibold">
-                      Order #{order.id} —{" "}
-                      {new Date(order.orderedAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </p>
-                    <p className="text-sm text-stone-500">{order.items.length} item(s)</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <Badge
-                      className={
-                        confirmed
-                          ? "border-green-300 text-green-700"
-                          : "border-orange-300 text-orange-600"
-                      }
-                    >
-                      {order.status}
-                    </Badge>
-                    <Link href={`/manager/inventory/${order.id}`}>
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
+          <div className="max-h-[600px] space-y-3 overflow-y-auto pr-1">
+            {orders.map((order) => {
+              const confirmed = order.status === "confirmed";
+              return (
+                <Card key={order.id}>
+                  <CardContent className="flex items-center justify-between gap-4 p-5 sm:p-6">
+                    <div className="space-y-1">
+                      <p className="font-semibold">
+                        Order #{order.id} -{" "}
+                        {new Date(order.orderedAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric"
+                        })}
+                      </p>
+                      <p className="text-sm text-stone-500">{order.items.length} item(s)</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge
+                        className={
+                          confirmed
+                            ? "border-green-300 text-green-700"
+                            : "border-orange-300 text-orange-600"
+                        }
+                      >
+                        {order.status}
+                      </Badge>
+                      <Link href={`/manager/inventory/${order.id}`}>
+                        <Button variant="outline" size="sm">
+                          View Details
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         )}
       </section>
 
@@ -97,29 +98,30 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
         {sortedIngredients.length === 0 ? (
           <p className="text-sm italic text-stone-500">No ingredients found.</p>
         ) : (
-          sortedIngredients.map((ing) => (
-            <Card key={ing.id} className={ing.isCritical ? "border-red-200" : ""}>
-              <CardContent className="space-y-1 p-5 sm:p-6">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold">{ing.name}</p>
-                  {ing.isCritical ? (
-                    <Badge className="border-red-300 text-red-600">Critical</Badge>
-                  ) : null}
-                </div>
-                <p className="text-sm text-stone-500">
-                  Current stock: {ing.servingsAvailable} servings
-                </p>
-                {ing.isCritical && ing.recommendedRestockQty != null ? (
-                  <p className="text-sm text-red-600">
-                    Recommended restock: {ing.recommendedRestockQty} units
+          <div className="max-h-[600px] space-y-3 overflow-y-auto pr-1">
+            {sortedIngredients.map((ing) => (
+              <Card key={ing.id} className={ing.isCritical ? "border-red-200" : ""}>
+                <CardContent className="space-y-1 p-5 sm:p-6">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold">{ing.name}</p>
+                    {ing.isCritical ? (
+                      <Badge className="border-red-300 text-red-600">Critical</Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-sm text-stone-500">
+                    Current stock: {ing.servingsAvailable} servings
                   </p>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))
+                  {ing.isCritical && ing.recommendedRestockQty != null ? (
+                    <p className="text-sm text-red-600">
+                      Recommended restock: {ing.recommendedRestockQty} units
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
       </section>
-
     </div>
   );
 }
