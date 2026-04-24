@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { unauthorizedJson } from "@/lib/auth";
-import { completeCurrentOrder } from "@/lib/db/orders";
-import { getOrCreateRewards, redeemPoints } from "@/lib/db/rewards";
+import { completeCurrentOrder, priceOrder } from "@/lib/db/orders";
+import { getOrCreateRewards, getRewardsBalance, redeemPoints } from "@/lib/db/rewards";
+import { resolveRedemption } from "@/lib/rewards-rules";
 import { getSessionCustomer, getSessionEmployee } from "@/lib/session";
 import { completeOrderSchema } from "@/lib/validation";
 
@@ -35,10 +36,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    await completeCurrentOrder(employeeId, parsed.data.items, customerGoogleId);
-    if (customer && parsed.data.pointsToRedeem > 0) {
-      await redeemPoints(customer.googleId, parsed.data.pointsToRedeem);
+    const redemption = customer ? parsed.data.redemption : { kind: "none" as const };
+    const { subtotal, baseSubtotal } = await priceOrder(parsed.data.items);
+    const { pointsCost, discount } = resolveRedemption(redemption, subtotal, baseSubtotal);
+
+    if (customer && pointsCost > 0) {
+      const balance = await getRewardsBalance(customer.googleId);
+      if (balance < pointsCost) {
+        return NextResponse.json({ error: "Not enough points for this redemption." }, { status: 400 });
+      }
+      await redeemPoints(customer.googleId, pointsCost);
     }
+
+    await completeCurrentOrder(employeeId, parsed.data.items, customerGoogleId, {
+      discount
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to complete order.";
     return NextResponse.json({ error: message }, { status: 500 });

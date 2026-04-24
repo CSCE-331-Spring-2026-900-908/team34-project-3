@@ -2,7 +2,7 @@
 
 // --- REPURPOSED FOR KIOSK (Imports) ---
 // We keep most imports. We just need to update the types we use.
-import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search } from "lucide-react";
+import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search, MessageCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import type { IngredientRecord, MenuItemRecord, SessionCustomer } from "@/lib/ty
 import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
 import Chatbot from "@/components/chatbot";
+import { REWARDS_RULES, resolveRedemption, type Redemption } from "@/lib/rewards-rules";
 
 // --- REPURPOSED FOR KIOSK (Props) ---
 // The props are changed to accept a `customer` object instead of an `employee` object.
@@ -124,9 +125,11 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [searchQuery, setSearchQuery] = useState("");
     const [activeCategory, setActiveCategory] = useState("All");
     const [searchKeyboardOpen, setSearchKeyboardOpen] = useState(false);
+    const [chatKeyboardOpen, setChatKeyboardOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<"menu" | "rewards">("menu");
     const [rewardsPoints, setRewardsPoints] = useState(0);
-    const [pointsToRedeem, setPointsToRedeem] = useState(0);
+    const [redemption, setRedemption] = useState<Redemption>({ kind: "none" });
+    const [flatPoints, setFlatPoints] = useState(0);
     // ... (all other useState and useEffect hooks are identical, copy them here) ...
 
     // Start of copied block from POS //
@@ -135,9 +138,11 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
     const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
     const [checkoutPending, setCheckoutPending] = useState(false);
+    const [chatbotOpen, setChatbotOpen] = useState(false);
     const [translatorLanguage, setTranslatorLanguage] = useState("en");
     const [modalTranslations, setModalTranslations] = useState<ModalTranslations | null>(null);
     const modalContentRef = useRef<HTMLDivElement | null>(null);
+    const paidIngredients = useMemo(() => ingredients.filter((ingredient) => ingredient.addCost > 0), [ingredients]);
 
     useEffect(() => {
         setTranslatorLanguage(localStorage.getItem("page-translator-language") ?? "en");
@@ -189,7 +194,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 return;
             }
 
-            const ingredientCostTexts = ingredients.map((ingredient) => `+${formatCurrency(ingredient.addCost)} each`);
+            const ingredientCostTexts = paidIngredients.map((ingredient) => `+${formatCurrency(ingredient.addCost)} each`);
             const texts = [
                 "Customize Drink",
                 selectedItem.name,
@@ -201,7 +206,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 ...iceOptions.map((option) => option.label),
                 "Extra Ingredients",
                 "Choose any extras you want to add to this drink.",
-                ...ingredients.map((ingredient) => ingredient.name),
+                ...paidIngredients.map((ingredient) => ingredient.name),
                 ...ingredientCostTexts,
                 "Remove",
                 "Add",
@@ -245,8 +250,8 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 iceOptions: iceOptions.map(() => translated[index++] ?? ""),
                 extraIngredients: translated[index++] ?? "Extra Ingredients",
                 extraIngredientsDescription: translated[index++] ?? "Choose any extras you want to add to this drink.",
-                ingredientNames: ingredients.map(() => translated[index++] ?? ""),
-                ingredientCosts: ingredients.map(() => translated[index++] ?? ""),
+                ingredientNames: paidIngredients.map(() => translated[index++] ?? ""),
+                ingredientCosts: paidIngredients.map(() => translated[index++] ?? ""),
                 remove: translated[index++] ?? "Remove",
                 add: translated[index++] ?? "Add",
                 itemTotal: translated[index++] ?? "Item total",
@@ -260,8 +265,27 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         return () => {
             cancelled = true;
         };
-    }, [ingredients, selectedItem, translatorLanguage]);
+    }, [paidIngredients, selectedItem, translatorLanguage]);
     // End of copied block from POS //
+
+    useEffect(() => {
+        if (!chatbotOpen) {
+            setChatKeyboardOpen(false);
+            return;
+        }
+
+        function handleEscape(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                setChatbotOpen(false);
+            }
+        }
+
+        window.addEventListener("keydown", handleEscape);
+
+        return () => {
+            window.removeEventListener("keydown", handleEscape);
+        };
+    }, [chatbotOpen]);
 
     useEffect(() => {
         fetch("/api/rewards")
@@ -271,7 +295,61 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }, []);
 
     const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
-    const discount = Math.floor(pointsToRedeem / 100);
+    const cartAddonTotal = useMemo(
+        () =>
+            items.reduce((sum, item) => {
+                const ingredientCost = item.ingredientChoices.reduce(
+                    (acc, choice) => acc + choice.addCost * choice.quantity,
+                    0
+                );
+                return sum + ingredientCost * item.quantity;
+            }, 0),
+        [items]
+    );
+    const baseSubtotal = cartTotal - cartAddonTotal;
+    const hasAddons = cartAddonTotal > 0;
+
+    const maxFlatPoints = Math.min(
+        Math.floor(rewardsPoints / 100) * 100,
+        Math.floor(cartTotal) * 100
+    );
+
+    const flatEligible = maxFlatPoints >= 100;
+    const addonsEligible = rewardsPoints >= REWARDS_RULES.addons.points && hasAddons;
+    const tier1Eligible = rewardsPoints >= REWARDS_RULES.tier1.points && cartTotal >= REWARDS_RULES.tier1.minCart;
+    const tier2Eligible = rewardsPoints >= REWARDS_RULES.tier2.points && cartTotal >= REWARDS_RULES.tier2.minCart;
+
+    useEffect(() => {
+        if (flatPoints > maxFlatPoints) {
+            setFlatPoints(maxFlatPoints);
+        }
+    }, [maxFlatPoints, flatPoints]);
+
+    useEffect(() => {
+        if (redemption.kind === "flat" && redemption.points !== flatPoints) {
+            setRedemption({ kind: "flat", points: flatPoints });
+        }
+    }, [flatPoints, redemption]);
+
+    useEffect(() => {
+        if (redemption.kind === "flat" && !flatEligible) {
+            setRedemption({ kind: "none" });
+        } else if (redemption.kind === "addons" && !addonsEligible) {
+            setRedemption({ kind: "none" });
+        } else if (redemption.kind === "tier1" && !tier1Eligible) {
+            setRedemption({ kind: "none" });
+        } else if (redemption.kind === "tier2" && !tier2Eligible) {
+            setRedemption({ kind: "none" });
+        }
+    }, [redemption, flatEligible, addonsEligible, tier1Eligible, tier2Eligible]);
+
+    let resolved;
+    try {
+        resolved = resolveRedemption(redemption, cartTotal, baseSubtotal);
+    } catch {
+        resolved = { pointsCost: 0, discount: 0, freeAddons: false };
+    }
+    const discount = resolved.discount;
     const categories = useMemo(
         () => ["All", ...Array.from(new Set(menuItems.map((item) => getDrinkCategory(item.name))))],
         [menuItems]
@@ -285,6 +363,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             return matchesCategory && matchesSearch;
         });
     }, [activeCategory, menuItems, searchQuery]);
+    const keyboardOpen = searchKeyboardOpen || chatKeyboardOpen;
 
     // All the functions (closeModal, updateIngredient, addSelectedItem, handleCheckout) are
     // IDENTICAL to pos-client.tsx [4], copy them here.
@@ -352,21 +431,23 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             return;
         }
 
+        const ingredientChoices = paidIngredients
+            .filter((ingredient) => (selectedIngredients[ingredient.id] ?? 0) > 0)
+            .map((ingredient) => ({
+                ingredientId: ingredient.id,
+                quantity: selectedIngredients[ingredient.id] ?? 0,
+                addCost: ingredient.addCost,
+                name: ingredient.name
+            }));
+
         const nextItem = {
             itemId: selectedItem.id,
             itemName: selectedItem.name,
             quantity,
             sweetness,
             ice,
-            ingredientChoices: ingredients
-                .filter((ingredient) => (selectedIngredients[ingredient.id] ?? 0) > 0)
-                .map((ingredient) => ({
-                    ingredientId: ingredient.id,
-                    quantity: selectedIngredients[ingredient.id] ?? 0,
-                    addCost: ingredient.addCost,
-                    name: ingredient.name
-                })),
-            cost: lineTotal(selectedItem, quantity, selectedIngredients, ingredients)
+            ingredientChoices,
+            cost: lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients)
         };
 
         if (editingItemIndex !== null) {
@@ -393,7 +474,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ items, pointsToRedeem })
+            body: JSON.stringify({ items, redemption })
         });
 
         setCheckoutPending(false);
@@ -405,7 +486,8 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         }
 
         clear();
-        setPointsToRedeem(0);
+        setRedemption({ kind: "none" });
+        setFlatPoints(0);
         setActiveTab("menu");
         // Refresh points balance after checkout (earned points added, redeemed points subtracted)
         fetch("/api/rewards")
@@ -433,7 +515,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             <SkipLink />
             {/* --- REPURPOSED FOR KIOSK (Main Layout) --- */}
             <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen bg-stone-100">
-                <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8", searchKeyboardOpen && "pb-[32rem]")}>
+                <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8", keyboardOpen && "pb-[32rem]")}>
 
                     {/* --- REPURPOSED FOR KIOSK (Header) --- */}
                     {/* We replace the employee-specific header with a customer welcome message. */}
@@ -522,32 +604,162 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                             <p className="mt-1 text-sm text-blue-500">Worth {formatCurrency(Math.floor(rewardsPoints / 100))}</p>
                                         </div>
                                         <div className="space-y-3">
-                                            <p className="font-medium">Redeem points</p>
-                                            <p className="text-sm text-stone-500">100 points = $1.00 off your order</p>
-                                            <div className="flex items-center gap-4">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setPointsToRedeem((p) => Math.max(0, p - 100))}
-                                                    disabled={pointsToRedeem === 0}
-                                                >
-                                                    <Minus className="h-4 w-4" />
-                                                </Button>
-                                                <span className="w-24 text-center text-2xl font-semibold">{pointsToRedeem} pts</span>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setPointsToRedeem((p) => Math.min(Math.floor(rewardsPoints / 100) * 100, p + 100))}
-                                                    disabled={pointsToRedeem >= Math.floor(rewardsPoints / 100) * 100}
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            {pointsToRedeem > 0 && (
-                                                <p className="text-sm font-medium text-green-700">
-                                                    {formatCurrency(discount)} discount applied to your order
+                                            <p className="font-medium">Choose a redemption</p>
+                                            <p className="text-sm text-stone-500">Select how you want to spend your points</p>
+
+                                            {/* Flat discount card */}
+                                            <button
+                                                type="button"
+                                                disabled={!flatEligible}
+                                                onClick={() => {
+                                                    if (redemption.kind === "flat") {
+                                                        setRedemption({ kind: "none" });
+                                                        setFlatPoints(0);
+                                                    } else {
+                                                        setFlatPoints(100);
+                                                        setRedemption({ kind: "flat", points: 100 });
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full rounded-xl border p-4 text-left transition-colors",
+                                                    redemption.kind === "flat"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-stone-200 bg-white hover:border-stone-300",
+                                                    !flatEligible && "cursor-not-allowed opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-semibold">Flat Discount</p>
+                                                    <span className="text-sm text-stone-500">100 pts = $1.00 off</span>
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">
+                                                    {!flatEligible ? "Not enough points or empty cart" : "Spend points for dollars off your order"}
                                                 </p>
+                                            </button>
+
+                                            {redemption.kind === "flat" && (
+                                                <div className="flex items-center gap-4 pl-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setFlatPoints((p) => Math.max(100, p - 100))}
+                                                        disabled={flatPoints <= 100}
+                                                    >
+                                                        <Minus className="h-4 w-4" />
+                                                    </Button>
+                                                    <span className="w-24 text-center text-2xl font-semibold">{flatPoints} pts</span>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setFlatPoints((p) => Math.min(maxFlatPoints, p + 100))}
+                                                        disabled={flatPoints >= maxFlatPoints}
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                    <span className="text-sm font-medium text-green-700">
+                                                        {formatCurrency(flatPoints / 100)} off
+                                                    </span>
+                                                </div>
                                             )}
+
+                                            {/* Free add-ons card */}
+                                            <button
+                                                type="button"
+                                                disabled={!addonsEligible}
+                                                onClick={() => {
+                                                    if (redemption.kind === "addons") {
+                                                        setRedemption({ kind: "none" });
+                                                    } else {
+                                                        setFlatPoints(0);
+                                                        setRedemption({ kind: "addons" });
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full rounded-xl border p-4 text-left transition-colors",
+                                                    redemption.kind === "addons"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-stone-200 bg-white hover:border-stone-300",
+                                                    !addonsEligible && "cursor-not-allowed opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-semibold">Add-on Credit</p>
+                                                    <span className="text-sm text-stone-500">{REWARDS_RULES.addons.points} pts</span>
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">
+                                                    {rewardsPoints < REWARDS_RULES.addons.points
+                                                        ? `Need ${REWARDS_RULES.addons.points} pts`
+                                                        : !hasAddons
+                                                            ? `Up to ${formatCurrency(REWARDS_RULES.addons.creditAmount)} off add-ons — add some first`
+                                                            : `Covers ${formatCurrency(Math.min(REWARDS_RULES.addons.creditAmount, cartAddonTotal))} of add-on costs (max ${formatCurrency(REWARDS_RULES.addons.creditAmount)})`}
+                                                </p>
+                                            </button>
+
+                                            {/* Tier 1 card */}
+                                            <button
+                                                type="button"
+                                                disabled={!tier1Eligible}
+                                                onClick={() => {
+                                                    if (redemption.kind === "tier1") {
+                                                        setRedemption({ kind: "none" });
+                                                    } else {
+                                                        setFlatPoints(0);
+                                                        setRedemption({ kind: "tier1" });
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full rounded-xl border p-4 text-left transition-colors",
+                                                    redemption.kind === "tier1"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-stone-200 bg-white hover:border-stone-300",
+                                                    !tier1Eligible && "cursor-not-allowed opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-semibold">{REWARDS_RULES.tier1.percent * 100}% Off</p>
+                                                    <span className="text-sm text-stone-500">{REWARDS_RULES.tier1.points} pts</span>
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">
+                                                    {rewardsPoints < REWARDS_RULES.tier1.points
+                                                        ? `Need ${REWARDS_RULES.tier1.points} pts`
+                                                        : cartTotal < REWARDS_RULES.tier1.minCart
+                                                            ? `Requires cart of $${REWARDS_RULES.tier1.minCart}+`
+                                                            : `Save ${formatCurrency(cartTotal * REWARDS_RULES.tier1.percent)} on this order`}
+                                                </p>
+                                            </button>
+
+                                            {/* Tier 2 card */}
+                                            <button
+                                                type="button"
+                                                disabled={!tier2Eligible}
+                                                onClick={() => {
+                                                    if (redemption.kind === "tier2") {
+                                                        setRedemption({ kind: "none" });
+                                                    } else {
+                                                        setFlatPoints(0);
+                                                        setRedemption({ kind: "tier2" });
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full rounded-xl border p-4 text-left transition-colors",
+                                                    redemption.kind === "tier2"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-stone-200 bg-white hover:border-stone-300",
+                                                    !tier2Eligible && "cursor-not-allowed opacity-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-semibold">{REWARDS_RULES.tier2.percent * 100}% Off</p>
+                                                    <span className="text-sm text-stone-500">{REWARDS_RULES.tier2.points} pts</span>
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">
+                                                    {rewardsPoints < REWARDS_RULES.tier2.points
+                                                        ? `Need ${REWARDS_RULES.tier2.points} pts`
+                                                        : cartTotal < REWARDS_RULES.tier2.minCart
+                                                            ? `Requires cart of $${REWARDS_RULES.tier2.minCart}+`
+                                                            : `Save ${formatCurrency(cartTotal * REWARDS_RULES.tier2.percent)} on this order`}
+                                                </p>
+                                            </button>
                                         </div>
                                         <Button variant="outline" className="w-full" onClick={() => setActiveTab("menu")}>
                                             Back to Menu
@@ -659,7 +871,12 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                     </div>
                                     {discount > 0 && (
                                         <div className="mt-2 flex items-center justify-between text-sm text-green-700">
-                                            <span>Rewards discount ({pointsToRedeem} pts)</span>
+                                            <span>
+                                                {redemption.kind === "flat" && `Rewards: ${resolved.pointsCost} pts`}
+                                                {redemption.kind === "addons" && "Rewards: Add-on credit"}
+                                                {redemption.kind === "tier1" && `Rewards: ${REWARDS_RULES.tier1.percent * 100}% off`}
+                                                {redemption.kind === "tier2" && `Rewards: ${REWARDS_RULES.tier2.percent * 100}% off`}
+                                            </span>
                                             <span>−{formatCurrency(discount)}</span>
                                         </div>
                                     )}
@@ -677,6 +894,53 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         </Card>
                     </div>
                 </div>
+
+                <button
+                    type="button"
+                    onClick={() => setChatbotOpen((current) => !current)}
+                    className={cn(
+                        "fixed right-6 z-50 flex items-center gap-2 rounded-full bg-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-blue-800",
+                        keyboardOpen ? "bottom-[calc(min(56vh,32rem)+1rem)]" : "bottom-6"
+                    )}
+                    aria-label={chatbotOpen ? "Close AI chatbot" : "Open AI chatbot"}
+                    aria-expanded={chatbotOpen}
+                    aria-controls="kiosk-ai-chatbot-popup"
+                >
+                    <MessageCircle className="h-5 w-5" />
+                    AI Chat
+                </button>
+
+                {chatbotOpen ? (
+                    <section
+                        id="kiosk-ai-chatbot-popup"
+                        className={cn(
+                            "fixed right-4 z-50 w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-stone-200 bg-white shadow-2xl sm:right-6 sm:w-[24rem]",
+                            keyboardOpen ? "bottom-[calc(min(56vh,32rem)+6rem)]" : "bottom-24"
+                        )}
+                        aria-label="Kiosk AI chatbot popup"
+                    >
+                        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
+                            <h2 className="text-sm font-semibold">AI Chat Assistant</h2>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setChatbotOpen(false)}
+                                aria-label="Close AI chatbot popup"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <div className="p-3">
+                            <Chatbot
+                                cartItems={items}
+                                ingredients={ingredients}
+                                menuItems={menuItems}
+                                onKeyboardOpenChange={setChatKeyboardOpen}
+                            />
+                        </div>
+                    </section>
+                ) : null}
 
                 {/* --- REPURPOSED FOR KIOSK (Customization Modal) --- */}
                 {/* This modal logic is IDENTICAL to PosClient [4]. It will appear when `selectedItem` is set. */}
@@ -790,7 +1054,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         </p>
                                     </div>
                                     <div className="grid gap-3 sm:grid-cols-2">
-                                        {ingredients.map((ingredient, index) => {
+                                        {paidIngredients.map((ingredient, index) => {
                                             const selectedQuantity = selectedIngredients[ingredient.id] ?? 0;
 
                                             return (
@@ -822,7 +1086,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                     <div className="flex items-center justify-between">
                                         <span className="font-medium">{modalTranslations?.itemTotal ?? "Item total"}</span>
                                         <span className="text-2xl font-semibold">
-                                            {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, ingredients))}
+                                            {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients))}
                                         </span>
                                     </div>
                                 </div>

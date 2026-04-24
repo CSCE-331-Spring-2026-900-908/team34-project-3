@@ -11,7 +11,6 @@ import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
 import type { IngredientRecord, MenuItemRecord, SessionEmployee } from "@/lib/types";
 import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
-import Chatbot from "@/components/chatbot";
 
 type PosClientProps = {
   employee: SessionEmployee;
@@ -76,6 +75,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
   const [translatorLanguage, setTranslatorLanguage] = useState("en");
   const [modalTranslations, setModalTranslations] = useState<ModalTranslations | null>(null);
   const modalContentRef = useRef<HTMLDivElement | null>(null);
+  const paidIngredients = useMemo(() => ingredients.filter((ingredient) => ingredient.addCost > 0), [ingredients]);
 
   useEffect(() => {
     setTranslatorLanguage(localStorage.getItem("page-translator-language") ?? "en");
@@ -127,7 +127,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
         return;
       }
 
-      const ingredientCostTexts = ingredients.map((ingredient) => `+${formatCurrency(ingredient.addCost)} each`);
+      const ingredientCostTexts = paidIngredients.map((ingredient) => `+${formatCurrency(ingredient.addCost)} each`);
       const texts = [
         "Customize Drink",
         selectedItem.name,
@@ -139,7 +139,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
         ...iceOptions.map((option) => option.label),
         "Extra Ingredients",
         "Choose any extras you want to add to this drink.",
-        ...ingredients.map((ingredient) => ingredient.name),
+        ...paidIngredients.map((ingredient) => ingredient.name),
         ...ingredientCostTexts,
         "Remove",
         "Add",
@@ -183,8 +183,8 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
         iceOptions: iceOptions.map(() => translated[index++] ?? ""),
         extraIngredients: translated[index++] ?? "Extra Ingredients",
         extraIngredientsDescription: translated[index++] ?? "Choose any extras you want to add to this drink.",
-        ingredientNames: ingredients.map(() => translated[index++] ?? ""),
-        ingredientCosts: ingredients.map(() => translated[index++] ?? ""),
+        ingredientNames: paidIngredients.map(() => translated[index++] ?? ""),
+        ingredientCosts: paidIngredients.map(() => translated[index++] ?? ""),
         remove: translated[index++] ?? "Remove",
         add: translated[index++] ?? "Add",
         itemTotal: translated[index++] ?? "Item total",
@@ -198,7 +198,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
     return () => {
       cancelled = true;
     };
-  }, [ingredients, selectedItem, translatorLanguage]);
+  }, [paidIngredients, selectedItem, translatorLanguage]);
 
   const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
 
@@ -278,7 +278,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
           addCost: ingredient.addCost,
           name: ingredient.name
         })),
-      cost: lineTotal(selectedItem, quantity, selectedIngredients, ingredients)
+      cost: lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients)
     };
 
     if (editingItemIndex !== null) {
@@ -445,9 +445,6 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                 </Button>
               </CardContent>
             </Card>
-            {/* Chatbot under checkout */}
-            <Chatbot cartItems={items} ingredients={ingredients} menuItems={menuItems} />
-
           </div>
         </div>
 
@@ -560,7 +557,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {ingredients.map((ingredient, index) => {
+                    {paidIngredients.map((ingredient, index) => {
                       const selectedQuantity = selectedIngredients[ingredient.id] ?? 0;
 
                       return (
@@ -592,7 +589,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{modalTranslations?.itemTotal ?? "Item total"}</span>
                     <span className="text-2xl font-semibold">
-                      {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, ingredients))}
+                      {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients))}
                     </span>
                   </div>
                 </div>

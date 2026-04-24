@@ -27,6 +27,7 @@ export default async function ZReportPage() {
             icon={<FileClock className="h-7 w-7" />}
             sectionLabel="Reporting"
             title="Z Report"
+            subtitle="Finalize the day with end-of-day totals and sales summaries."
             employeeBadge={`${employee.fullName} (Manager)`}
             links={getManagerNavLinks("/manager/z-report" as Route)}
           />

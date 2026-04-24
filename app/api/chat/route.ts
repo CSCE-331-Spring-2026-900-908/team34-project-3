@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getChatTrendSummary } from "@/lib/db/chat-insights";
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -191,12 +193,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let trendSummary = "Consumer trend data is currently unavailable.";
+
+    try {
+      trendSummary = await getChatTrendSummary(cartItems.map((item) => item.itemName));
+    } catch {
+      // If trend retrieval fails, continue with core chat functionality.
+    }
+
     const systemPrompt = [
       "You are Pearl, a friendly and knowledgeable boba shop employee helping inside a POS system.",
       "Only help with boba shop topics such as drinks, toppings, sweetness, ice, cart review, recommendations, upsells, and menu guidance.",
       "If the user asks for something unrelated to a boba shop, politely refuse and redirect to menu, drink, topping, or order questions.",
       "Use the current cart and menu context when answering.",
       "When the user asks for suggestions, recommend specific drinks or add-ons from the menu and explain why they fit.",
+      "Use the provided consumer trend snapshot from the live database to ground recommendation answers.",
+      "Treat trend data as a preference signal, then tailor to the user's request and weather.",
       "If the user asks for a generic recommendation and weather context is available, tailor the recommendation to the current weather.",
       "On hot weather, prefer refreshing, lighter, or icy drinks first. On cooler weather, prefer richer, creamier, or comforting drinks first.",
       "If the cart already has items, suggest complementary drinks, topping tweaks, or sweetness/ice adjustments.",
@@ -214,6 +226,7 @@ export async function POST(req: NextRequest) {
       `Menu items: ${buildMenuSummary(menuItems)}`,
       `Available extra ingredients: ${buildIngredientSummary(ingredients)}`,
       `Current cart:\n${buildCartSummary(cartItems)}`,
+      `Consumer trend snapshot (retrieved from order history):\n${trendSummary}`,
       weather
         ? `Current local weather: ${weather.locationName ?? "Unknown location"} | ${weather.description ?? "Unknown conditions"} | temperature ${weather.temperatureF ?? "unknown"}F | feels like ${weather.feelsLikeF ?? "unknown"}F | humidity ${weather.humidity ?? "unknown"}% | wind ${weather.windMph ?? "unknown"} mph`
         : "Current local weather: unavailable."
@@ -253,7 +266,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         {
-          reply: `I’m having trouble reaching the boba assistant right now. ${apiError}`
+          reply: `I'm having trouble reaching the boba assistant right now. ${apiError}`
         },
         { status: response.status }
       );
