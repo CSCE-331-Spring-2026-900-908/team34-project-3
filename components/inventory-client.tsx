@@ -55,7 +55,7 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
             const confirmed = order.status === "confirmed";
             return (
               <Card key={order.id}>
-                <CardContent className="flex items-center justify-between gap-4 py-4">
+                <CardContent className="flex items-center justify-between gap-4 p-5 sm:p-6">
                   <div className="space-y-1">
                     <p className="font-semibold">
                       Order #{order.id} —{" "}
