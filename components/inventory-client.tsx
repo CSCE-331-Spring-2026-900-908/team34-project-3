@@ -93,7 +93,9 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
 
       {/* Right: All ingredients sorted by criticality */}
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Ingredient Stock Levels</h2>
+        <div className="flex min-h-9 items-center">
+          <h2 className="text-lg font-semibold">Ingredient Stock Levels</h2>
+        </div>
 
         {sortedIngredients.length === 0 ? (
           <p className="text-sm italic text-stone-500">No ingredients found.</p>
