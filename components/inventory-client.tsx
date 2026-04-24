@@ -99,7 +99,7 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
         ) : (
           sortedIngredients.map((ing) => (
             <Card key={ing.id} className={ing.isCritical ? "border-red-200" : ""}>
-              <CardContent className="space-y-1 py-4">
+              <CardContent className="space-y-1 p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold">{ing.name}</p>
                   {ing.isCritical ? (

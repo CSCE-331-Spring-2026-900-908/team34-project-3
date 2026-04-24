@@ -152,7 +152,7 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
               }`}
               onClick={() => selectItem(item)}
             >
-              <CardContent className="flex items-center justify-between gap-4 py-4">
+              <CardContent className="flex items-center justify-between gap-4 p-5 sm:p-6">
                 <div>
                   <p className="font-semibold">{item.name}</p>
                   <p className="text-sm text-stone-500">

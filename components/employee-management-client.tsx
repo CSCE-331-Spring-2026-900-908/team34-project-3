@@ -132,7 +132,7 @@ export function EmployeeManagementClient({ employees }: Props) {
               }`}
               onClick={() => selectEmployee(emp)}
             >
-              <CardContent className="flex items-center justify-between gap-4 py-4">
+              <CardContent className="flex items-center justify-between gap-4 p-5 sm:p-6">
                 <div>
                   <p className="font-semibold">
                     {emp.firstName} {emp.lastName}
