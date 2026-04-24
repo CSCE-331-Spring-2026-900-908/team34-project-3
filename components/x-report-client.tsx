@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
+import { ReportSectionHeading, ReportSummaryCell } from "@/components/report-primitives";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { XReportData } from "@/lib/db/reports";
@@ -96,24 +97,6 @@ function buildChartTicks(maxValue: number): ChartTick[] {
   });
 }
 
-function SummaryCell({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="border-b border-border px-4 py-3 sm:border-b-0 sm:border-r last:border-r-0">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{label}</p>
-      <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
-    </div>
-  );
-}
-
-function SectionHeading({ title, meta }: { title: string; meta?: string }) {
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border px-4 py-3">
-      <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-foreground">{title}</h2>
-      {meta ? <p className="text-xs text-stone-500">{meta}</p> : null}
-    </div>
-  );
-}
-
 export function XReportClient({ report }: Props) {
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
@@ -144,9 +127,9 @@ export function XReportClient({ report }: Props) {
           </div>
 
           <div className="grid sm:grid-cols-3">
-            <SummaryCell label="Total Sales" value={formatCurrency(report.totalSales)} />
-            <SummaryCell label="Order Count" value={report.orderCount} />
-            <SummaryCell label="Average Ticket" value={formatCurrency(report.averageOrderValue)} />
+            <ReportSummaryCell label="Total Sales" value={formatCurrency(report.totalSales)} />
+            <ReportSummaryCell label="Order Count" value={report.orderCount} />
+            <ReportSummaryCell label="Average Ticket" value={formatCurrency(report.averageOrderValue)} />
           </div>
         </CardContent>
       </Card>
@@ -154,7 +137,7 @@ export function XReportClient({ report }: Props) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_340px]">
         <Card className="rounded-xl">
           <CardContent className="p-0">
-            <SectionHeading title="Hourly Sales" meta="Revenue by completed order hour" />
+            <ReportSectionHeading title="Hourly Sales" meta="Revenue by completed order hour" />
             <div className="p-4">
               {chartBars.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-[rgb(var(--surface-alt))] px-4 py-10 text-center text-sm text-stone-500">
@@ -285,7 +268,7 @@ export function XReportClient({ report }: Props) {
 
         <Card className="rounded-xl">
           <CardContent className="p-0">
-            <SectionHeading title="Top Selling Items" meta={`${report.topSellingItems.length} item${report.topSellingItems.length === 1 ? "" : "s"}`} />
+            <ReportSectionHeading title="Top Selling Items" meta={`${report.topSellingItems.length} item${report.topSellingItems.length === 1 ? "" : "s"}`} />
             {report.topSellingItems.length === 0 ? (
               <div className="px-4 py-6 text-sm text-stone-500">No item sales recorded.</div>
             ) : (
@@ -320,7 +303,7 @@ export function XReportClient({ report }: Props) {
 
       <Card className="rounded-xl">
         <CardContent className="p-0">
-          <SectionHeading title="Sales By Item" meta={`${report.salesByItem.length} item${report.salesByItem.length === 1 ? "" : "s"}`} />
+          <ReportSectionHeading title="Sales By Item" meta={`${report.salesByItem.length} item${report.salesByItem.length === 1 ? "" : "s"}`} />
           {report.salesByItem.length === 0 ? (
             <div className="px-4 py-6 text-sm text-stone-500">No item sales recorded.</div>
           ) : (

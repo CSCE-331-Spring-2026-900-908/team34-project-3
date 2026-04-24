@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
+import { ReportSectionHeading, ReportSummaryCell } from "@/components/report-primitives";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ZReportData } from "@/lib/db/reports";
@@ -14,24 +15,6 @@ import { cn, formatCurrency } from "@/lib/utils";
 type Props = {
   report: ZReportData;
 };
-
-function SummaryCell({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="border-b border-border px-4 py-3 sm:border-b-0 sm:border-r last:border-r-0">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{label}</p>
-      <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
-    </div>
-  );
-}
-
-function SectionHeading({ title, meta }: { title: string; meta?: string }) {
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border px-4 py-3">
-      <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-foreground">{title}</h2>
-      {meta ? <p className="text-xs text-stone-500">{meta}</p> : null}
-    </div>
-  );
-}
 
 function PreviewRow({ label, value }: { label: string; value: string | number }) {
   return (
@@ -112,11 +95,11 @@ export function ZReportClient({ report }: Props) {
           </div>
 
           <div className="grid sm:grid-cols-5">
-            <SummaryCell label="Business Date" value={formatBusinessDate(report.businessDate)} />
-            <SummaryCell label="Window Start" value={formatBusinessDateTime(reportWindowStartedAt)} />
-            <SummaryCell label="Total Sales" value={formatCurrency(report.preview.totalSales)} />
-            <SummaryCell label="Order Count" value={report.preview.orderCount} />
-            <SummaryCell label="Average Ticket" value={formatCurrency(report.preview.averageOrderValue)} />
+            <ReportSummaryCell label="Business Date" value={formatBusinessDate(report.businessDate)} />
+            <ReportSummaryCell label="Window Start" value={formatBusinessDateTime(reportWindowStartedAt)} />
+            <ReportSummaryCell label="Total Sales" value={formatCurrency(report.preview.totalSales)} />
+            <ReportSummaryCell label="Order Count" value={report.preview.orderCount} />
+            <ReportSummaryCell label="Average Ticket" value={formatCurrency(report.preview.averageOrderValue)} />
           </div>
         </CardContent>
       </Card>
@@ -124,7 +107,7 @@ export function ZReportClient({ report }: Props) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <Card className="rounded-xl">
           <CardContent className="p-0">
-            <SectionHeading title="Current Closeout Preview" />
+            <ReportSectionHeading title="Current Closeout Preview" />
             <dl>
               <PreviewRow label="Business Date" value={formatBusinessDate(report.preview.businessDate)} />
               <PreviewRow label="Window Start" value={formatBusinessDateTime(reportWindowStartedAt)} />
@@ -137,7 +120,7 @@ export function ZReportClient({ report }: Props) {
 
         <Card className="rounded-xl">
           <CardContent className="p-0">
-            <SectionHeading title="Closeout Status" />
+            <ReportSectionHeading title="Closeout Status" />
             <div className="divide-y divide-border text-sm">
               <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-4 px-4 py-3">
                 <span className="font-medium text-stone-600">Status</span>
@@ -166,7 +149,7 @@ export function ZReportClient({ report }: Props) {
 
       <Card className="rounded-xl">
         <CardContent className="p-0">
-          <SectionHeading title="Previous Z Reports" meta={`${report.history.length} report${report.history.length === 1 ? "" : "s"}`} />
+          <ReportSectionHeading title="Previous Z Reports" meta={`${report.history.length} report${report.history.length === 1 ? "" : "s"}`} />
           {report.history.length === 0 ? (
             <div className="px-4 py-6 text-sm text-stone-500">No previous Z reports found.</div>
           ) : (

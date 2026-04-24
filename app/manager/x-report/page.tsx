@@ -27,6 +27,7 @@ export default async function XReportPage() {
             icon={<BarChart3 className="h-7 w-7" />}
             sectionLabel="Reporting"
             title="X Report"
+            subtitle="Review the current register totals before closing out the day."
             employeeBadge={`${employee.fullName} (Manager)`}
             links={getManagerNavLinks("/manager/x-report" as Route)}
           />
