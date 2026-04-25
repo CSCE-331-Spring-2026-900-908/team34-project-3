@@ -134,7 +134,7 @@ export function XReportClient({ report }: Props) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_340px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="rounded-xl">
           <CardContent className="p-0">
             <ReportSectionHeading title="Hourly Sales" meta="Revenue by completed order hour" />
