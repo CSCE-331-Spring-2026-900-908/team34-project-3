@@ -668,7 +668,7 @@ export function ManagerCopilotClient() {
                       <div className="flex items-start gap-3">
                         <MessagesSquare className="mt-0.5 h-4 w-4 text-stone-500" />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">{chat.title}</p>
+                          <p className="wrap text-sm font-semibold text-foreground">{chat.title}</p>
                           <p className="mt-1 text-xs text-stone-500">Updated {formatTimestamp(chat.updatedAt)}</p>
                         </div>
                       </div>
