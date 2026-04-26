@@ -562,10 +562,10 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                             </Button>
                         )}
 
-                        <Button variant="outline" onClick={backToPortal} className="ml-auto gap-2">
+                        {/* <Button variant="outline" onClick={backToPortal} className="ml-auto gap-2">
                             <LogOut className="h-4 w-4" />
                             Back To Portal
-                        </Button>
+                        </Button> */}
                     </div>
 
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_380px]">
