@@ -2,7 +2,7 @@
 
 // --- REPURPOSED FOR KIOSK (Imports) ---
 // We keep most imports. We just need to update the types we use.
-import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search, MessageCircle } from "lucide-react";
+import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search, MessageCircle, Gift, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -17,6 +17,8 @@ import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
 import Chatbot from "@/components/chatbot";
 import { REWARDS_RULES, resolveRedemption, type Redemption } from "@/lib/rewards-rules";
+
+const pendingRewardsCheckoutStorageKey = "kiosk-pending-rewards-checkout";
 
 // --- REPURPOSED FOR KIOSK (Props) ---
 // The props are changed to accept a `customer` object instead of an `employee` object.
@@ -117,6 +119,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const addItem = useOrderStore((state) => state.addItem);
     const removeItem = useOrderStore((state) => state.removeItem);
     const updateItem = useOrderStore((state) => state.updateItem);
+    const replaceItems = useOrderStore((state) => state.replaceItems);
     const clear = useOrderStore((state) => state.clear);
     const [selectedItem, setSelectedItem] = useState<MenuItemRecord | null>(null);
     const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
@@ -135,6 +138,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
     const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
     const [checkoutPending, setCheckoutPending] = useState(false);
+    const [rewardsCheckoutPromptOpen, setRewardsCheckoutPromptOpen] = useState(false);
     const [chatbotOpen, setChatbotOpen] = useState(false);
     const [translatorLanguage, setTranslatorLanguage] = useState("en");
     const [modalTranslations, setModalTranslations] = useState<ModalTranslations | null>(null);
@@ -155,6 +159,32 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             window.removeEventListener("page-translator:language-changed", handleLanguageChanged);
         };
     }, []);
+
+    useEffect(() => {
+        if (!customer || items.length > 0) {
+            return;
+        }
+
+        const storedCheckout = sessionStorage.getItem(pendingRewardsCheckoutStorageKey);
+
+        if (!storedCheckout) {
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(storedCheckout) as { items?: typeof items; redemption?: Redemption };
+
+            if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+                replaceItems(parsed.items);
+                setRedemption(parsed.redemption ?? { kind: "none" });
+                toast.success("You are signed in. Your order is ready to checkout with rewards.");
+            }
+        } catch {
+            // Ignore malformed checkout restore data and let the kiosk continue normally.
+        } finally {
+            sessionStorage.removeItem(pendingRewardsCheckoutStorageKey);
+        }
+    }, [customer, items.length, replaceItems]);
 
     useEffect(() => {
         if (!selectedItem) {
@@ -463,12 +493,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         closeModal();
     }
 
-    async function handleCheckout() {
-        if (items.length === 0) {
-            toast.error("Add at least one item before checkout.");
-            return;
-        }
-
+    async function submitCheckout(checkoutAsGuest = false) {
         setCheckoutPending(true);
 
         const response = await fetch("/api/orders", {
@@ -476,7 +501,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ items, redemption })
+            body: JSON.stringify({ items, redemption: checkoutAsGuest ? { kind: "none" } : redemption })
         });
 
         setCheckoutPending(false);
@@ -488,6 +513,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         }
 
         clear();
+        setRewardsCheckoutPromptOpen(false);
         setRedemption({ kind: "none" });
         setFlatPoints(0);
         setActiveTab("menu");
@@ -497,6 +523,34 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             .then((data: { points?: number }) => setRewardsPoints(data.points ?? 0))
             .catch(() => {});
         toast.success("Order completed.");
+    }
+
+    async function handleCheckout() {
+        if (items.length === 0) {
+            toast.error("Add at least one item before checkout.");
+            return;
+        }
+
+        if (!customer) {
+            setRewardsCheckoutPromptOpen(true);
+            return;
+        }
+
+        await submitCheckout();
+    }
+
+    function startRewardsSignIn() {
+        if (items.length > 0) {
+            sessionStorage.setItem(
+                pendingRewardsCheckoutStorageKey,
+                JSON.stringify({
+                    items,
+                    redemption
+                })
+            );
+        }
+
+        window.location.href = `/api/auth/google/start?next=${encodeURIComponent("/kiosk")}&login=${encodeURIComponent("/customer-login")}`;
     }
     // End of copied block from POS //
 
@@ -982,6 +1036,59 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                             />
                         </div>
                     </section>
+                ) : null}
+
+                {rewardsCheckoutPromptOpen ? (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+                        <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                                        <Gift className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-stone-500">
+                                            Rewards checkout
+                                        </p>
+                                        <h2 className="mt-1 text-xl font-semibold tracking-tight text-stone-900">
+                                            Earn points on this order?
+                                        </h2>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setRewardsCheckoutPromptOpen(false)}
+                                    className="rounded-lg border border-stone-200 bg-white p-2 text-stone-500 transition hover:bg-stone-50"
+                                    aria-label="Close rewards checkout prompt"
+                                    disabled={checkoutPending}
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <p className="mt-4 text-sm leading-6 text-stone-600">
+                                Sign in with Google to earn rewards points for this purchase, or continue as a guest
+                                without earning points.
+                            </p>
+
+                            <div className="mt-6 grid gap-3">
+                                <Button className="w-full gap-2" size="lg" onClick={startRewardsSignIn} disabled={checkoutPending}>
+                                    <UserRound className="h-4 w-4" />
+                                    Sign in with Google
+                                </Button>
+                                <Button
+                                    className="w-full gap-2"
+                                    variant="outline"
+                                    size="lg"
+                                    onClick={() => void submitCheckout(true)}
+                                    disabled={checkoutPending}
+                                >
+                                    <Receipt className="h-4 w-4" />
+                                    {checkoutPending ? "Completing order..." : "Checkout as guest"}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 ) : null}
 
                 {/* --- REPURPOSED FOR KIOSK (Customization Modal) --- */}
