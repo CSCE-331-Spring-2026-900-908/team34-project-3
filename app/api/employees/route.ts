@@ -27,7 +27,8 @@ export async function POST(request: Request) {
     parsed.data.firstName.trim(),
     parsed.data.lastName.trim(),
     parsed.data.email.trim().toLowerCase(),
-    parsed.data.isManager
+    parsed.data.isManager,
+    parsed.data.password
   );
 
   return NextResponse.json({ ok: true });
