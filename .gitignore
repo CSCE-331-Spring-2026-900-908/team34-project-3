@@ -6,3 +6,4 @@ dist
 coverage
 .env*
 sensitive.env
+tsconfig.tsbuildinfo

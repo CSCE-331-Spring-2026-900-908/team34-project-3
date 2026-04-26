@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { loginSchema } from "@/lib/validation";
+import { pinLoginSchema } from "@/lib/validation";
 
 type LoginFormProps = {
   nextPath: string;
@@ -16,15 +16,14 @@ type LoginFormProps = {
 
 export function LoginForm({ nextPath }: LoginFormProps) {
   const router = useRouter();
-  const [employeeId, setEmployeeId] = useState("");
-  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
   const [inlineError, setInlineError] = useState("");
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const parsed = loginSchema.safeParse({ employeeId, password });
+    const parsed = pinLoginSchema.safeParse({ pin });
 
     if (!parsed.success) {
       setInlineError(parsed.error.issues[0]?.message ?? "Invalid login.");
@@ -34,7 +33,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
     setPending(true);
     setInlineError("");
 
-    const response = await fetch("/api/auth/login", {
+    const response = await fetch("/api/auth/pin-login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -59,27 +58,18 @@ export function LoginForm({ nextPath }: LoginFormProps) {
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="space-y-2">
-        <Label htmlFor="employeeId">Employee ID</Label>
+        <Label htmlFor="pin">Employee PIN</Label>
         <Input
-          id="employeeId"
-          value={employeeId}
-          inputMode="numeric"
-          autoComplete="username"
-          onChange={(event) => setEmployeeId(event.target.value.replace(/\D/g, ""))}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
+          id="pin"
           type="password"
-          value={password}
-          autoComplete="current-password"
-          onChange={(event) => setPassword(event.target.value)}
+          value={pin}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))}
         />
       </div>
       <Button className="w-full" type="submit" disabled={pending}>
-        {pending ? "Logging in..." : "Log in"}
+        {pending ? "Signing in..." : "Sign in"}
       </Button>
       <p className="min-h-5 text-center text-sm text-danger">{inlineError}</p>
     </form>

@@ -68,7 +68,7 @@ type AssistantPayload = {
   reply?: string;
   reasoningSummary?: string;
   artifact?: {
-    type: "brief" | "comparison";
+    type: "brief" | "comparison" | "html_demo";
     title: string;
     subtitle?: string;
     highlights?: string[];
@@ -80,12 +80,18 @@ type AssistantPayload = {
       label: string;
       value: string;
     }>;
+    html?: string;
   } | null;
 };
 
 type ToolTraceEntry = {
   name: string;
   arguments: Record<string, unknown>;
+};
+
+type AdditionalIngredientRow = {
+  addon_name: string;
+  quantity_sold: number | bigint;
 };
 
 const model = process.env.MANAGER_COPILOT_MODEL ?? "gpt-4o-mini";
@@ -114,8 +120,54 @@ function sanitizeReply(reply: string) {
     .trim();
 }
 
+function sanitizeHtmlDemo(html: unknown) {
+  if (typeof html !== "string") {
+    return "";
+  }
+
+  return html
+    .replace(/<\s*(iframe|object|embed|link|meta)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*(iframe|object|embed|link|meta)\b[^>]*\/?>/gi, "")
+    .replace(/\s(?:src|href|action)\s*=\s*(['"])\s*(?!#|data:image\/)[\s\S]*?\1/gi, "")
+    .replace(/\s(?:src|href|action)\s*=\s*[^\s>]+/gi, "")
+    .slice(0, 60000)
+    .trim();
+}
+
+function normalizeArtifact(artifact: AssistantPayload["artifact"]) {
+  if (!artifact || typeof artifact !== "object") {
+    return null;
+  }
+
+  if (artifact.type === "html_demo") {
+    const html = sanitizeHtmlDemo(artifact.html);
+
+    if (!html) {
+      return null;
+    }
+
+    return {
+      type: "html_demo" as const,
+      title: typeof artifact.title === "string" && artifact.title.trim() ? artifact.title.trim() : "Interactive Demo",
+      subtitle: typeof artifact.subtitle === "string" ? artifact.subtitle.trim() : undefined,
+      html
+    };
+  }
+
+  if (artifact.type !== "brief" && artifact.type !== "comparison") {
+    return null;
+  }
+
+  return artifact;
+}
+
 function wantsChart(message: string) {
   return /\b(chart|graph|plot|visuali[sz]e|trendline)\b/i.test(message);
+}
+
+function wantsHtmlDemo(message: string) {
+  return /\b(html|interactive|demo|demonstration|tutorial|walkthrough|simulation)\b/i.test(message) &&
+    /\b(generate|create|build|make|render|show)\b/i.test(message);
 }
 
 function wantsNextWeekForecast(message: string) {
@@ -131,6 +183,11 @@ function wantsBroadAnalytics(message: string) {
   return /\b(generally|usually|typically|trend|compare|pattern|correlat|breakdown|group by|highest|lowest|best|worst|which day|which item)\b/i.test(
     message
   );
+}
+
+function wantsAdditionalIngredientAnalytics(message: string) {
+  return /\b(common|popular|top|most|frequent|frequently|best)\b/i.test(message) &&
+    /\b(additional ingredient|additional ingredients|add[- ]?on|add[- ]?ons|extra ingredient|extra ingredients|topping|toppings)\b/i.test(message);
 }
 
 function wantsItemSalesChart(message: string) {
@@ -211,8 +268,83 @@ async function queryManagerDatabase(sql: string) {
   return {
     sql: guardedSql,
     rowCount: rows.length,
-    rows
+    rows: toJsonSafe(rows)
   };
+}
+
+function toNumber(value: unknown) {
+  if (value == null) {
+    return 0;
+  }
+
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  return Number(value);
+}
+
+function toJsonSafe(value: unknown): unknown {
+  if (value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => toJsonSafe(entry));
+  }
+
+  if (typeof value === "object") {
+    if ("toNumber" in value && typeof value.toNumber === "function") {
+      return value.toNumber();
+    }
+
+    if ("toJSON" in value && typeof value.toJSON === "function") {
+      return value.toJSON();
+    }
+
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, toJsonSafe(entry)])
+    );
+  }
+
+  return String(value);
+}
+
+async function getTopAdditionalIngredients(limit = 3) {
+  const safeLimit = Math.max(1, Math.min(10, Math.round(limit)));
+  const rows = await prisma.$queryRaw<AdditionalIngredientRow[]>`
+    SELECT addon_name, quantity_sold
+    FROM (
+      SELECT 'Boba'::text AS addon_name, COALESCE(SUM(CASE WHEN oi.boba > 1 THEN oi.quantity ELSE 0 END), 0)::int AS quantity_sold
+      FROM orderitem oi
+      UNION ALL
+      SELECT 'Mango Jelly'::text AS addon_name, COALESCE(SUM(CASE WHEN oi.mango_jelly > 0 THEN oi.quantity ELSE 0 END), 0)::int AS quantity_sold
+      FROM orderitem oi
+      UNION ALL
+      SELECT 'Aloe Jelly'::text AS addon_name, COALESCE(SUM(CASE WHEN oi.aloe_jelly > 0 THEN oi.quantity ELSE 0 END), 0)::int AS quantity_sold
+      FROM orderitem oi
+    ) add_on_trends
+    WHERE quantity_sold > 0
+    ORDER BY quantity_sold DESC, addon_name ASC
+    LIMIT ${safeLimit}
+  `;
+
+  return rows.map((row) => ({
+    name: row.addon_name,
+    quantitySold: toNumber(row.quantity_sold)
+  }));
 }
 
 function extractChartableQueryResult(result: unknown) {
@@ -415,6 +547,24 @@ const tools: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "get_top_additional_ingredients",
+      description:
+        "Get the most commonly selected paid add-on ingredients or toppings on ordered drinks, such as boba, mango jelly, and aloe jelly.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "number",
+            description: "Maximum number of add-on ingredients to return. Use 1 for the single most common add-on."
+          }
+        },
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "query_database",
       description:
         "Run a guarded read-only SQL query for broader manager analytics when the predefined tools do not fit the question.",
@@ -532,6 +682,11 @@ async function runTool(name: string, parsedArguments: Record<string, unknown>) {
     return getInventoryAlerts(limit);
   }
 
+  if (name === "get_top_additional_ingredients") {
+    const limit = typeof parsedArguments.limit === "number" ? parsedArguments.limit : 3;
+    return getTopAdditionalIngredients(limit);
+  }
+
   if (name === "query_database") {
     const sql = typeof parsedArguments.sql === "string" ? parsedArguments.sql : "";
     return queryManagerDatabase(sql);
@@ -599,6 +754,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ask a manager question first." }, { status: 400 });
   }
 
+  const recentIntentText = [...history.slice(-4).map((entry) => entry.content), message].join("\n");
+  const htmlDemoRequested = wantsHtmlDemo(message) || wantsHtmlDemo(recentIntentText);
   const instructionContext = await getManagerInstructionContext();
   const chatId =
     requestedChatId ??
@@ -624,12 +781,14 @@ export async function POST(request: Request) {
         "Use get_weekday_sales_pattern for questions about whether Fridays, weekends, weekdays, or other named days generally perform better over recent weeks.",
         "Use get_next_week_sales_forecast for next-week or upcoming-week predictions based on historical daily sales.",
         "Use get_sales_forecast for predictive analysis and projected close questions.",
+        "Use get_top_additional_ingredients for questions about the most common, popular, or frequent additional ingredients, add-ons, extras, or toppings added to drinks.",
         "Use query_database for broader analytics that do not fit the predefined tools, but only with read-only SQL.",
         `Allowed SQL tables: ${SQL_ALLOWED_TABLES.join(", ")}.`,
         `Schema reference: ${SQL_SCHEMA_GUIDE}`,
         "Prefer the manager_copilot_* analytics views first when they answer the question, because they are safer and easier to query correctly than raw transaction tables.",
         "When writing SQL, use the real schema names exactly. orders joins to orderitem on orders.order_id = orderitem.order_id, and orderitem joins to item on orderitem.item_id = item.id.",
         "For item revenue, use SUM(orderitem.cost). For quantities, use SUM(orderitem.quantity). Do not use orders.id or orderitem.price because those columns do not exist.",
+        "Additional drink add-ons are tracked directly on orderitem: boba is selected when boba > 1, mango jelly when mango_jelly > 0, and aloe jelly when aloe_jelly > 0. Count selected add-ons with SUM(orderitem.quantity), not by joining itemingredient, because itemingredient is the base recipe.",
         "orders.cost has been validated to match the summed orderitem.cost for each order in the available data.",
         "For item trend charts, manager_copilot_item_daily_sales is usually the best source.",
         "For daily sales or forecasting support, manager_copilot_daily_sales is usually the best source.",
@@ -642,7 +801,11 @@ export async function POST(request: Request) {
           : "",
         "Use create_chart_image when a visual trend or comparison would help the manager.",
         "If the user explicitly asks for a chart, graph, plot, or visualization, you should produce chart data and call create_chart_image.",
+        "You can generate and render interactive HTML demonstrations when a manager asks for an HTML tutorial, demo, walkthrough, simulation, or interactive learning aid.",
+        "For HTML demos, create a self-contained artifact with type html_demo. Use inline CSS and optional inline JavaScript only. Do not use external URLs, external scripts, images, forms, iframes, object tags, embed tags, localStorage, cookies, or network requests.",
+        "Do not add charts or visual analytics to an HTML demo unless the user explicitly asks for a chart, graph, plot, visualization, or data comparison. For brief tutorials, prefer tabs, checklists, step cards, mini quizzes, and action buttons.",
         "Do not invent metrics, restock levels, item rankings, or document content.",
+        "Do not answer with a promise to check data later. Either call the needed tool now, answer from completed tool results, ask a clarifying question, or say the available tools cannot answer it.",
         "Keep answers concise, decision-oriented, and professional.",
         "If a question is outside the available tools, say what you can answer instead."
       ].join("\n")
@@ -684,6 +847,22 @@ export async function POST(request: Request) {
       role: "system",
       content:
         "If the predefined manager tools are not enough to answer this analytic question precisely, call query_database with a guarded read-only SQL query instead of giving up."
+    });
+  }
+
+  if (wantsAdditionalIngredientAnalytics(message)) {
+    messages.splice(1, 0, {
+      role: "system",
+      content:
+        "This request is about additional ingredients or add-ons selected on drinks. You should call get_top_additional_ingredients before answering. If you use SQL instead, count orderitem add-on columns directly: boba > 1, mango_jelly > 0, aloe_jelly > 0, weighted by orderitem.quantity."
+    });
+  }
+
+  if (htmlDemoRequested) {
+    messages.splice(1, 0, {
+      role: "system",
+      content:
+        "This request asks for an interactive HTML demo or tutorial. You should satisfy it by returning an html_demo artifact in the final response. Do not refuse by saying you cannot generate HTML; this app can render sandboxed HTML artifacts."
     });
   }
 
@@ -798,7 +977,7 @@ export async function POST(request: Request) {
                     title: (toolResult as QuickChartResult).title,
                     type: (toolResult as QuickChartResult).type
                   })
-                : JSON.stringify(toolResult)
+                : JSON.stringify(toJsonSafe(toolResult))
           });
         } catch (error) {
           const toolError =
@@ -816,6 +995,19 @@ export async function POST(request: Request) {
     }
 
     break;
+  }
+
+  if (wantsAdditionalIngredientAnalytics(message) && !toolResults.has("get_top_additional_ingredients")) {
+    const toolResult = await getTopAdditionalIngredients(3);
+    toolResults.set("get_top_additional_ingredients", [toolResult]);
+    toolTrace.push({
+      name: "get_top_additional_ingredients",
+      arguments: { limit: 3 }
+    });
+    messages.push({
+      role: "system",
+      content: `Completed get_top_additional_ingredients with this JSON result: ${JSON.stringify(toolResult)}`
+    });
   }
 
   if (!chart && wantsChart(message)) {
@@ -942,7 +1134,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: 450,
+      max_tokens: htmlDemoRequested ? 3500 : 450,
       response_format: {
         type: "json_object"
       },
@@ -951,9 +1143,13 @@ export async function POST(request: Request) {
           role: "system",
           content: [
             "You are formatting a final manager copilot response.",
-            'Return JSON with this exact shape: {"reply":"string","reasoningSummary":"string","artifact":null|{"type":"brief"|"comparison","title":"string","subtitle":"string","highlights":["string"],"sections":[{"title":"string","body":"string"}],"metrics":[{"label":"string","value":"string"}]}}',
+            'Return JSON with this exact shape: {"reply":"string","reasoningSummary":"string","artifact":null|{"type":"brief"|"comparison","title":"string","subtitle":"string","highlights":["string"],"sections":[{"title":"string","body":"string"}],"metrics":[{"label":"string","value":"string"}]}|{"type":"html_demo","title":"string","subtitle":"string","html":"string"}}',
             "The reply should be concise and useful for a manager.",
             "The reasoningSummary should be a short, safe summary of how the conclusion was reached.",
+            "Do not say you will check, look up, retrieve, or analyze something unless the final answer also gives the completed result. Report what was already done.",
+            htmlDemoRequested
+              ? "The user asked for an interactive HTML demo/tutorial. Return an html_demo artifact with complete self-contained HTML. Include inline CSS and small inline JavaScript for interactions such as tabs, checklists, quizzes, sliders, or step navigation. Keep the reply short. Do not include fake charts, external resources, URLs, iframes, forms, network requests, cookies, or localStorage."
+              : "Use html_demo artifacts when an interactive tutorial, simulation, or demonstration would be more useful than plain text.",
             "Use artifact when the user asked for a brief, report, comparison, summary, or action plan, or when a richer structured presentation would clearly help.",
             "If artifact is not useful, return null for artifact.",
             "Do not reveal hidden private chain-of-thought. Summarize only the evidence and tool usage at a high level.",
@@ -983,7 +1179,15 @@ export async function POST(request: Request) {
     try {
       assistantPayload = JSON.parse(finalContent) as AssistantPayload;
     } catch {
-      assistantPayload = { reply: finalContent };
+      const looksLikeJson = /^\s*[{[]/.test(finalContent);
+      assistantPayload = {
+        reply: looksLikeJson
+          ? "I generated a response, but it was not formatted correctly enough to render. Please try the request again."
+          : finalContent,
+        reasoningSummary: looksLikeJson
+          ? "The model returned malformed JSON instead of a renderable manager copilot response."
+          : undefined
+      };
     }
   }
 
@@ -994,7 +1198,7 @@ export async function POST(request: Request) {
   const safeReasoningSummary =
     assistantPayload?.reasoningSummary?.trim() ??
     "I checked the relevant manager tools and summarized the strongest signals.";
-  const artifact = assistantPayload?.artifact ?? null;
+  const artifact = normalizeArtifact(assistantPayload?.artifact ?? null);
 
   await saveChatMessage({
     chatId,

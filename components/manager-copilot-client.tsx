@@ -39,7 +39,7 @@ type ChartResult = {
 };
 
 type ArtifactResult = {
-  type: "brief" | "comparison";
+  type: "brief" | "comparison" | "html_demo";
   title: string;
   subtitle?: string;
   highlights?: string[];
@@ -51,6 +51,7 @@ type ArtifactResult = {
     label: string;
     value: string;
   }>;
+  html?: string;
 } | null;
 
 type Message = {
@@ -138,7 +139,50 @@ function formatTimestamp(value: string) {
   }).format(new Date(value));
 }
 
+function recoverAssistantMessage(message: Message): Message {
+  if (message.role !== "assistant" || message.artifact || !/^\s*\{/.test(message.content)) {
+    return message;
+  }
+
+  try {
+    const parsed = JSON.parse(message.content) as {
+      reply?: string;
+      reasoningSummary?: string;
+      artifact?: ArtifactResult;
+    };
+
+    return {
+      ...message,
+      content: parsed.reply ?? "I generated an interactive manager artifact.",
+      reasoningSummary: message.reasoningSummary ?? parsed.reasoningSummary,
+      artifact: parsed.artifact ?? null
+    };
+  } catch {
+    return message;
+  }
+}
+
 function ArtifactCard({ artifact }: { artifact: Exclude<ArtifactResult, null> }) {
+  if (artifact.type === "html_demo") {
+    return (
+      <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-white">
+        <div className="border-b border-border bg-[rgb(var(--surface-alt))] px-4 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">
+            Interactive HTML Demo
+          </p>
+          <h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{artifact.title}</h3>
+          {artifact.subtitle ? <p className="mt-1 text-sm text-stone-600">{artifact.subtitle}</p> : null}
+        </div>
+        <iframe
+          title={artifact.title}
+          srcDoc={artifact.html}
+          sandbox="allow-scripts"
+          className="h-[620px] w-full bg-white"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-white">
       <div className="border-b border-border bg-[rgb(var(--surface-alt))] px-4 py-3">
@@ -286,12 +330,14 @@ export function ManagerCopilotClient() {
       }
 
       const loadedMessages =
-        (payload as { messages?: Array<Message> } | null)?.messages?.map((message) => ({
-          ...message,
-          toolTrace: Array.isArray(message.toolTrace) ? message.toolTrace : [],
-          knowledgeSources: Array.isArray(message.knowledgeSources) ? message.knowledgeSources : [],
-          artifact: (message.artifact ?? null) as ArtifactResult
-        })) ?? [];
+        (payload as { messages?: Array<Message> } | null)?.messages?.map((message) =>
+          recoverAssistantMessage({
+            ...message,
+            toolTrace: Array.isArray(message.toolTrace) ? message.toolTrace : [],
+            knowledgeSources: Array.isArray(message.knowledgeSources) ? message.knowledgeSources : [],
+            artifact: (message.artifact ?? null) as ArtifactResult
+          })
+        ) ?? [];
 
       setCurrentChatId(chatId);
       setMessages(loadedMessages.length > 0 ? loadedMessages : [initialAssistantMessage]);
@@ -488,7 +534,7 @@ export function ManagerCopilotClient() {
 
       setMessages((current) => [
         ...current,
-        {
+        recoverAssistantMessage({
           role: "assistant",
           content:
             payload?.reply ??
@@ -498,7 +544,7 @@ export function ManagerCopilotClient() {
           knowledgeSources: payload?.knowledgeSources ?? [],
           chart: payload?.chart ?? null,
           artifact: payload?.artifact ?? null
-        }
+        })
       ]);
 
       await loadSidebarData();
@@ -668,7 +714,7 @@ export function ManagerCopilotClient() {
                       <div className="flex items-start gap-3">
                         <MessagesSquare className="mt-0.5 h-4 w-4 text-stone-500" />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">{chat.title}</p>
+                          <p className="wrap text-sm font-semibold text-foreground">{chat.title}</p>
                           <p className="mt-1 text-xs text-stone-500">Updated {formatTimestamp(chat.updatedAt)}</p>
                         </div>
                       </div>

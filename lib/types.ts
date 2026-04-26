@@ -69,6 +69,7 @@ export type EmployeeRecord = {
   email: string | null;
   isManager: boolean;
   hasGoogleAccount: boolean;
+  password: number | null;
 };
 
 export type RestockOrderItemRecord = {

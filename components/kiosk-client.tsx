@@ -2,7 +2,7 @@
 
 // --- REPURPOSED FOR KIOSK (Imports) ---
 // We keep most imports. We just need to update the types we use.
-import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search, MessageCircle } from "lucide-react";
+import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search, MessageCircle, Gift, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -12,16 +12,18 @@ import { CustomerWeatherWidget } from "@/components/customer-weather-widget";
 import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
 import { TouchscreenInput } from "@/components/touchscreen-input";
 // We now import SessionCustomer instead of SessionEmployee
-import type { IngredientRecord, MenuItemRecord, SessionCustomer } from "@/lib/types";
+import type { IngredientRecord, MenuItemRecord, SessionCustomer, SessionEmployee } from "@/lib/types";
 import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
 import Chatbot from "@/components/chatbot";
 import { REWARDS_RULES, resolveRedemption, type Redemption } from "@/lib/rewards-rules";
 
+const pendingRewardsCheckoutStorageKey = "kiosk-pending-rewards-checkout";
+
 // --- REPURPOSED FOR KIOSK (Props) ---
 // The props are changed to accept a `customer` object instead of an `employee` object.
 type KioskClientProps = {
-    customer: SessionCustomer;
+    customer: SessionCustomer | null;
     menuItems: MenuItemRecord[];
     ingredients: IngredientRecord[];
 };
@@ -113,12 +115,11 @@ function getDrinkCategory(name: string) {
 // We rename the component and update its props.
 export function KioskClient({ customer, menuItems, ingredients }: KioskClientProps) {
     const router = useRouter();
-    // All of the state management hooks (useState, useOrderStore, etc.) are IDENTICAL
-    // to pos-client.tsx [4]. We can reuse all of this logic.
     const items = useOrderStore((state) => state.items);
     const addItem = useOrderStore((state) => state.addItem);
     const removeItem = useOrderStore((state) => state.removeItem);
     const updateItem = useOrderStore((state) => state.updateItem);
+    const replaceItems = useOrderStore((state) => state.replaceItems);
     const clear = useOrderStore((state) => state.clear);
     const [selectedItem, setSelectedItem] = useState<MenuItemRecord | null>(null);
     const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
@@ -130,7 +131,6 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [rewardsPoints, setRewardsPoints] = useState(0);
     const [redemption, setRedemption] = useState<Redemption>({ kind: "none" });
     const [flatPoints, setFlatPoints] = useState(0);
-    // ... (all other useState and useEffect hooks are identical, copy them here) ...
 
     // Start of copied block from POS //
     const [quantity, setQuantity] = useState(1);
@@ -138,6 +138,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
     const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
     const [checkoutPending, setCheckoutPending] = useState(false);
+    const [rewardsCheckoutPromptOpen, setRewardsCheckoutPromptOpen] = useState(false);
     const [chatbotOpen, setChatbotOpen] = useState(false);
     const [translatorLanguage, setTranslatorLanguage] = useState("en");
     const [modalTranslations, setModalTranslations] = useState<ModalTranslations | null>(null);
@@ -158,6 +159,32 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             window.removeEventListener("page-translator:language-changed", handleLanguageChanged);
         };
     }, []);
+
+    useEffect(() => {
+        if (!customer || items.length > 0) {
+            return;
+        }
+
+        const storedCheckout = sessionStorage.getItem(pendingRewardsCheckoutStorageKey);
+
+        if (!storedCheckout) {
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(storedCheckout) as { items?: typeof items; redemption?: Redemption };
+
+            if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+                replaceItems(parsed.items);
+                setRedemption(parsed.redemption ?? { kind: "none" });
+                toast.success("You are signed in. Your order is ready to checkout with rewards.");
+            }
+        } catch {
+            // Ignore malformed checkout restore data and let the kiosk continue normally.
+        } finally {
+            sessionStorage.removeItem(pendingRewardsCheckoutStorageKey);
+        }
+    }, [customer, items.length, replaceItems]);
 
     useEffect(() => {
         if (!selectedItem) {
@@ -288,11 +315,16 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }, [chatbotOpen]);
 
     useEffect(() => {
+        if (!customer) {
+            setRewardsPoints(0); // Ensure points are 0 for guests
+            return;
+        }
+
         fetch("/api/rewards")
             .then((r) => r.json())
             .then((data: { points?: number }) => setRewardsPoints(data.points ?? 0))
             .catch(() => {});
-    }, []);
+    }, [customer]);
 
     const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
     const cartAddonTotal = useMemo(
@@ -461,12 +493,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         closeModal();
     }
 
-    async function handleCheckout() {
-        if (items.length === 0) {
-            toast.error("Add at least one item before checkout.");
-            return;
-        }
-
+    async function submitCheckout(checkoutAsGuest = false) {
         setCheckoutPending(true);
 
         const response = await fetch("/api/orders", {
@@ -474,7 +501,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ items, redemption })
+            body: JSON.stringify({ items, redemption: checkoutAsGuest ? { kind: "none" } : redemption })
         });
 
         setCheckoutPending(false);
@@ -486,6 +513,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         }
 
         clear();
+        setRewardsCheckoutPromptOpen(false);
         setRedemption({ kind: "none" });
         setFlatPoints(0);
         setActiveTab("menu");
@@ -496,17 +524,54 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             .catch(() => {});
         toast.success("Order completed.");
     }
+
+    async function handleCheckout() {
+        if (items.length === 0) {
+            toast.error("Add at least one item before checkout.");
+            return;
+        }
+
+        if (!customer) {
+            setRewardsCheckoutPromptOpen(true);
+            return;
+        }
+
+        await submitCheckout();
+    }
+
+    function startRewardsSignIn() {
+        if (items.length > 0) {
+            sessionStorage.setItem(
+                pendingRewardsCheckoutStorageKey,
+                JSON.stringify({
+                    items,
+                    redemption
+                })
+            );
+        }
+
+        window.location.href = `/api/auth/google/start?next=${encodeURIComponent("/kiosk")}&login=${encodeURIComponent("/customer-login")}`;
+    }
     // End of copied block from POS //
 
     // --- REPURPOSED FOR KIOSK (Logout Function) ---
     // The customer logout endpoint is different from the employee one.
-    async function logout() {
+    async function logoutCustomer() {
         // The original PosClient used "/api/auth/logout" [4].
         // From kiosk/page.tsx, we see the customer logout is "/api/auth/customer/logout" [2].
         await fetch("/api/auth/customer/logout", { method: "POST" });
         clear(); // Clear the cart on logout
+        router.replace("/kiosk"); // Go back to the kiosk as a guest
+        router.refresh();
+    }
+
+    async function backToPortal() {
+        // TODO ask for a PIN confirmation and then leave
+
+        // blah blah blah
+
+        clear(); // Clear the cart when leaving
         router.replace("/"); // Go back to the home page
-        // TODO: Should this go back to the home page or somewhere else...?
         router.refresh();
     }
 
@@ -525,81 +590,112 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         </div>
                         <div className="min-w-0">
                             <p className="text-sm font-bold uppercase tracking-widest text-stone-500">Welcome</p>
-                            <h1 className="text-2xl font-semibold tracking-tight">{customer.fullName}</h1>
+                            <h1 className="text-2xl font-semibold tracking-tight">{customer ? customer.fullName : ""}</h1>
                             <p className="text-sm text-stone-500">Ready to order? Select an item below.</p>
                         </div>
                         <div className="shrink-0">
                             <CustomerWeatherWidget />
                         </div>
-                        <div className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
-                            <Receipt className="h-4 w-4" />
-                            {rewardsPoints} pts
-                        </div>
-                        <Button variant="outline" onClick={logout} className="ml-auto gap-2">
+                        
+                        {/* If customer exists, show points and a Sign Out button. */}
+                        {customer ? (
+                            <>
+                                <div className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
+                                    <Receipt className="h-4 w-4" />
+                                    {rewardsPoints} pts
+                                </div>
+                                <Button variant="outline" onClick={logoutCustomer} className="ml-auto gap-2">
+                                    <LogOut className="h-4 w-4" />
+                                    Sign Out
+                                </Button>
+                            </>
+                        ) : (
+                            /* If no customer, show a Sign In button. */
+                            <Button variant="default" className="ml-auto gap-2">
+                                <a href="/customer-login?next=/kiosk">Sign In to Earn Rewards</a>
+                            </Button>
+                        )}
+
+                        {/* <Button variant="outline" onClick={backToPortal} className="ml-auto gap-2">
                             <LogOut className="h-4 w-4" />
-                            Sign Out
-                        </Button>
+                            Back To Portal
+                        </Button> */}
                     </div>
 
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_380px]">
                         <Card className="shadow-sm">
                             <CardHeader>
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveTab("menu")}
-                                            className={cn("text-xl font-semibold transition-colors", activeTab === "menu" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
-                                        >
-                                            Menu
-                                        </button>
-                                        <span className="text-stone-300">|</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveTab("rewards")}
-                                            className={cn("flex items-center gap-2 text-xl font-semibold transition-colors", activeTab === "rewards" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
-                                        >
-                                            Rewards
-                                            {rewardsPoints > 0 && (
-                                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                                                    {rewardsPoints} pts
-                                                </span>
-                                            )}
-                                        </button>
-                                    </div>
-                                    {activeTab === "menu" && (
-                                        <div className="flex flex-col gap-4">
-                                            <div className="relative max-w-md">
-                                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                                                <TouchscreenInput
-                                                    value={searchQuery}
-                                                    onValueChange={setSearchQuery}
-                                                    onKeyboardOpenChange={setSearchKeyboardOpen}
-                                                    placeholder="Search for a drink"
-                                                    className="pl-9"
-                                                />
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {categories.map((category) => (
-                                                    <Button
-                                                        key={category}
-                                                        variant={activeCategory === category ? "default" : "outline"}
-                                                        size="sm"
-                                                        onClick={() => setActiveCategory(category)}
-                                                    >
-                                                        {category}
-                                                    </Button>
-                                                ))}
-                                            </div>
+                                {customer ? (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab("menu")}
+                                                className={cn("text-xl font-semibold transition-colors", activeTab === "menu" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
+                                            >
+                                                Menu
+                                            </button>
+                                            <span className="text-stone-300">|</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab("rewards")}
+                                                className={cn("flex items-center gap-2 text-xl font-semibold transition-colors", activeTab === "rewards" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
+                                            >
+                                                Rewards
+                                                {rewardsPoints > 0 && (
+                                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                                        {rewardsPoints} pts
+                                                    </span>
+                                                )}
+                                            </button>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab("menu")}
+                                                className={cn("text-xl font-semibold transition-colors", activeTab === "menu" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
+                                            >
+                                                Menu
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                {activeTab === "menu" && (
+                                    <div className="flex flex-col gap-4">
+                                        <div className="relative max-w-md">
+                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                                            <TouchscreenInput
+                                                value={searchQuery}
+                                                onValueChange={setSearchQuery}
+                                                onKeyboardOpenChange={setSearchKeyboardOpen}
+                                                placeholder="Search for a drink"
+                                                className="pl-9"
+                                            />
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {categories.map((category) => (
+                                                <Button
+                                                    key={category}
+                                                    variant={activeCategory === category ? "default" : "outline"}
+                                                    size="sm"
+                                                    onClick={() => setActiveCategory(category)}
+                                                >
+                                                    {category}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
                             </CardHeader>
                             <CardContent>
                                 {activeTab === "rewards" ? (
                                     <div className="space-y-6">
                                         <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-                                            <p className="text-sm text-blue-600">Your balance</p>
+                                            <p className="text-sm text-blue-600">{customer ? "Your Balance:" : "Sign In To Use Points"}</p>
                                             <p className="mt-1 text-4xl font-bold tracking-tight text-blue-700">{rewardsPoints} pts</p>
                                             <p className="mt-1 text-sm text-blue-500">Worth {formatCurrency(Math.floor(rewardsPoints / 100))}</p>
                                         </div>
@@ -940,6 +1036,59 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                             />
                         </div>
                     </section>
+                ) : null}
+
+                {rewardsCheckoutPromptOpen ? (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+                        <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                                        <Gift className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-stone-500">
+                                            Rewards checkout
+                                        </p>
+                                        <h2 className="mt-1 text-xl font-semibold tracking-tight text-stone-900">
+                                            Earn points on this order?
+                                        </h2>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setRewardsCheckoutPromptOpen(false)}
+                                    className="rounded-lg border border-stone-200 bg-white p-2 text-stone-500 transition hover:bg-stone-50"
+                                    aria-label="Close rewards checkout prompt"
+                                    disabled={checkoutPending}
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <p className="mt-4 text-sm leading-6 text-stone-600">
+                                Sign in with Google to earn rewards points for this purchase, or continue as a guest
+                                without earning points.
+                            </p>
+
+                            <div className="mt-6 grid gap-3">
+                                <Button className="w-full gap-2" size="lg" onClick={startRewardsSignIn} disabled={checkoutPending}>
+                                    <UserRound className="h-4 w-4" />
+                                    Sign in with Google
+                                </Button>
+                                <Button
+                                    className="w-full gap-2"
+                                    variant="outline"
+                                    size="lg"
+                                    onClick={() => void submitCheckout(true)}
+                                    disabled={checkoutPending}
+                                >
+                                    <Receipt className="h-4 w-4" />
+                                    {checkoutPending ? "Completing order..." : "Checkout as guest"}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 ) : null}
 
                 {/* --- REPURPOSED FOR KIOSK (Customization Modal) --- */}
