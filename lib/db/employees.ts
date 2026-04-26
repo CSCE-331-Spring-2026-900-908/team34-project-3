@@ -9,6 +9,7 @@ function mapEmployee(record: {
   is_manager: boolean;
   email: string | null;
   has_google_account: boolean;
+  password: number | null;
 }): EmployeeRecord {
   return {
     employeeId: record.employee_id,
@@ -16,8 +17,35 @@ function mapEmployee(record: {
     lastName: record.last_name,
     email: record.email,
     isManager: record.is_manager,
-    hasGoogleAccount: record.has_google_account
+    hasGoogleAccount: record.has_google_account,
+    password: record.password
   };
+}
+
+export async function getEmployeeByPasscode(password: number) {
+  // Use Prisma to find a unique employee where the password matches.
+  const employee = await prisma.employee.findFirst({
+    where: {
+      password: password,
+    },
+  });
+
+  // If no employee is found with that PIN, return null.
+  if (!employee) {
+    return null;
+  }
+
+  // If an employee is found, we need to enrich their record with Google Auth info,
+  // just like the getEmployees() function does, so the return type is consistent.
+  const authMap = await getEmployeeGoogleAuthMap();
+  const authInfo = authMap.get(employee.employee_id);
+
+  // Use your existing `mapEmployee` helper to format the final record.
+  return mapEmployee({
+    ...employee,
+    email: authInfo?.email ?? null,
+    has_google_account: !!authInfo?.googleId,
+  });
 }
 
 export async function getEmployees() {
@@ -38,7 +66,7 @@ export async function getEmployees() {
   );
 }
 
-export async function addEmployee(firstName: string, lastName: string, email: string, isManager: boolean) {
+export async function addEmployee(firstName: string, lastName: string, email: string, isManager: boolean, password: number) {
   const nextIdRows = await prisma.$queryRaw<Array<{ next_id: number }>>`
     SELECT COALESCE(MAX(employee_id), 0) + 1 AS next_id
     FROM employee
@@ -68,7 +96,8 @@ export async function saveEmployee(
   firstName: string,
   lastName: string,
   email: string,
-  isManager: boolean
+  isManager: boolean,
+  passWord: number
 ) {
   await prisma.employee.update({
     where: {
@@ -77,7 +106,8 @@ export async function saveEmployee(
     data: {
       first_name: firstName,
       last_name: lastName,
-      is_manager: isManager
+      is_manager: isManager,
+      password: passWord
     }
   });
 
