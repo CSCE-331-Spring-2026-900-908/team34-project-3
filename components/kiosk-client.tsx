@@ -12,7 +12,7 @@ import { CustomerWeatherWidget } from "@/components/customer-weather-widget";
 import { MAIN_CONTENT_ID, SkipLink } from "@/components/skip-link";
 import { TouchscreenInput } from "@/components/touchscreen-input";
 // We now import SessionCustomer instead of SessionEmployee
-import type { IngredientRecord, MenuItemRecord, SessionCustomer } from "@/lib/types";
+import type { IngredientRecord, MenuItemRecord, SessionCustomer, SessionEmployee } from "@/lib/types";
 import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
 import Chatbot from "@/components/chatbot";
@@ -21,7 +21,7 @@ import { REWARDS_RULES, resolveRedemption, type Redemption } from "@/lib/rewards
 // --- REPURPOSED FOR KIOSK (Props) ---
 // The props are changed to accept a `customer` object instead of an `employee` object.
 type KioskClientProps = {
-    customer: SessionCustomer;
+    customer: SessionCustomer | null;
     menuItems: MenuItemRecord[];
     ingredients: IngredientRecord[];
 };
@@ -113,8 +113,6 @@ function getDrinkCategory(name: string) {
 // We rename the component and update its props.
 export function KioskClient({ customer, menuItems, ingredients }: KioskClientProps) {
     const router = useRouter();
-    // All of the state management hooks (useState, useOrderStore, etc.) are IDENTICAL
-    // to pos-client.tsx [4]. We can reuse all of this logic.
     const items = useOrderStore((state) => state.items);
     const addItem = useOrderStore((state) => state.addItem);
     const removeItem = useOrderStore((state) => state.removeItem);
@@ -130,7 +128,6 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [rewardsPoints, setRewardsPoints] = useState(0);
     const [redemption, setRedemption] = useState<Redemption>({ kind: "none" });
     const [flatPoints, setFlatPoints] = useState(0);
-    // ... (all other useState and useEffect hooks are identical, copy them here) ...
 
     // Start of copied block from POS //
     const [quantity, setQuantity] = useState(1);
@@ -288,11 +285,16 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }, [chatbotOpen]);
 
     useEffect(() => {
+        if (!customer) {
+            setRewardsPoints(0); // Ensure points are 0 for guests
+            return;
+        }
+
         fetch("/api/rewards")
             .then((r) => r.json())
             .then((data: { points?: number }) => setRewardsPoints(data.points ?? 0))
             .catch(() => {});
-    }, []);
+    }, [customer]);
 
     const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
     const cartAddonTotal = useMemo(
@@ -500,13 +502,22 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
 
     // --- REPURPOSED FOR KIOSK (Logout Function) ---
     // The customer logout endpoint is different from the employee one.
-    async function logout() {
+    async function logoutCustomer() {
         // The original PosClient used "/api/auth/logout" [4].
         // From kiosk/page.tsx, we see the customer logout is "/api/auth/customer/logout" [2].
         await fetch("/api/auth/customer/logout", { method: "POST" });
         clear(); // Clear the cart on logout
+        router.replace("/kiosk"); // Go back to the kiosk as a guest
+        router.refresh();
+    }
+
+    async function backToPortal() {
+        // TODO ask for a PIN confirmation and then leave
+
+        // blah blah blah
+
+        clear(); // Clear the cart when leaving
         router.replace("/"); // Go back to the home page
-        // TODO: Should this go back to the home page or somewhere else...?
         router.refresh();
     }
 
@@ -525,81 +536,112 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         </div>
                         <div className="min-w-0">
                             <p className="text-sm font-bold uppercase tracking-widest text-stone-500">Welcome</p>
-                            <h1 className="text-2xl font-semibold tracking-tight">{customer.fullName}</h1>
+                            <h1 className="text-2xl font-semibold tracking-tight">{customer ? customer.fullName : ""}</h1>
                             <p className="text-sm text-stone-500">Ready to order? Select an item below.</p>
                         </div>
                         <div className="shrink-0">
                             <CustomerWeatherWidget />
                         </div>
-                        <div className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
-                            <Receipt className="h-4 w-4" />
-                            {rewardsPoints} pts
-                        </div>
-                        <Button variant="outline" onClick={logout} className="ml-auto gap-2">
+                        
+                        {/* If customer exists, show points and a Sign Out button. */}
+                        {customer ? (
+                            <>
+                                <div className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
+                                    <Receipt className="h-4 w-4" />
+                                    {rewardsPoints} pts
+                                </div>
+                                <Button variant="outline" onClick={logoutCustomer} className="ml-auto gap-2">
+                                    <LogOut className="h-4 w-4" />
+                                    Sign Out
+                                </Button>
+                            </>
+                        ) : (
+                            /* If no customer, show a Sign In button. */
+                            <Button variant="default" className="ml-auto gap-2">
+                                <a href="/customer-login?next=/kiosk">Sign In to Earn Rewards</a>
+                            </Button>
+                        )}
+
+                        <Button variant="outline" onClick={backToPortal} className="ml-auto gap-2">
                             <LogOut className="h-4 w-4" />
-                            Sign Out
+                            Back To Portal
                         </Button>
                     </div>
 
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_380px]">
                         <Card className="shadow-sm">
                             <CardHeader>
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveTab("menu")}
-                                            className={cn("text-xl font-semibold transition-colors", activeTab === "menu" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
-                                        >
-                                            Menu
-                                        </button>
-                                        <span className="text-stone-300">|</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveTab("rewards")}
-                                            className={cn("flex items-center gap-2 text-xl font-semibold transition-colors", activeTab === "rewards" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
-                                        >
-                                            Rewards
-                                            {rewardsPoints > 0 && (
-                                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                                                    {rewardsPoints} pts
-                                                </span>
-                                            )}
-                                        </button>
-                                    </div>
-                                    {activeTab === "menu" && (
-                                        <div className="flex flex-col gap-4">
-                                            <div className="relative max-w-md">
-                                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                                                <TouchscreenInput
-                                                    value={searchQuery}
-                                                    onValueChange={setSearchQuery}
-                                                    onKeyboardOpenChange={setSearchKeyboardOpen}
-                                                    placeholder="Search for a drink"
-                                                    className="pl-9"
-                                                />
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {categories.map((category) => (
-                                                    <Button
-                                                        key={category}
-                                                        variant={activeCategory === category ? "default" : "outline"}
-                                                        size="sm"
-                                                        onClick={() => setActiveCategory(category)}
-                                                    >
-                                                        {category}
-                                                    </Button>
-                                                ))}
-                                            </div>
+                                {customer ? (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab("menu")}
+                                                className={cn("text-xl font-semibold transition-colors", activeTab === "menu" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
+                                            >
+                                                Menu
+                                            </button>
+                                            <span className="text-stone-300">|</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab("rewards")}
+                                                className={cn("flex items-center gap-2 text-xl font-semibold transition-colors", activeTab === "rewards" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
+                                            >
+                                                Rewards
+                                                {rewardsPoints > 0 && (
+                                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                                        {rewardsPoints} pts
+                                                    </span>
+                                                )}
+                                            </button>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab("menu")}
+                                                className={cn("text-xl font-semibold transition-colors", activeTab === "menu" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
+                                            >
+                                                Menu
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                {activeTab === "menu" && (
+                                    <div className="flex flex-col gap-4">
+                                        <div className="relative max-w-md">
+                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                                            <TouchscreenInput
+                                                value={searchQuery}
+                                                onValueChange={setSearchQuery}
+                                                onKeyboardOpenChange={setSearchKeyboardOpen}
+                                                placeholder="Search for a drink"
+                                                className="pl-9"
+                                            />
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {categories.map((category) => (
+                                                <Button
+                                                    key={category}
+                                                    variant={activeCategory === category ? "default" : "outline"}
+                                                    size="sm"
+                                                    onClick={() => setActiveCategory(category)}
+                                                >
+                                                    {category}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
                             </CardHeader>
                             <CardContent>
                                 {activeTab === "rewards" ? (
                                     <div className="space-y-6">
                                         <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-                                            <p className="text-sm text-blue-600">Your balance</p>
+                                            <p className="text-sm text-blue-600">{customer ? "Your Balance:" : "Sign In To Use Points"}</p>
                                             <p className="mt-1 text-4xl font-bold tracking-tight text-blue-700">{rewardsPoints} pts</p>
                                             <p className="mt-1 text-sm text-blue-500">Worth {formatCurrency(Math.floor(rewardsPoints / 100))}</p>
                                         </div>

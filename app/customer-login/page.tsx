@@ -43,6 +43,7 @@ export default async function CustomerLoginPage({ searchParams }: CustomerLoginP
           title="Sign In With Google"
           description="Customers can use Google to enter the kiosk experience."
           googleHref={googleHref}
+          backHref="/kiosk"
           helperText="After sign-in, we create or refresh a database record for this email and use that to decide access."
           errorMessage={errorMessage}
         />
