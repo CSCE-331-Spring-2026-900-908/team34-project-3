@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getEmployeeGoogleAuthMap, saveEmployeeGoogleAuthLink } from "@/lib/db/google-auth";
-import type { EmployeeRecord } from "@/lib/types";
+import type { EmployeeRecord, SessionEmployee } from "@/lib/types";
 
 function mapEmployee(record: {
   employee_id: number;
@@ -23,29 +23,49 @@ function mapEmployee(record: {
 }
 
 export async function getEmployeeByPasscode(password: number) {
-  // Use Prisma to find a unique employee where the password matches.
   const employee = await prisma.employee.findFirst({
     where: {
-      password: password,
-    },
+      password
+    }
   });
 
-  // If no employee is found with that PIN, return null.
   if (!employee) {
     return null;
   }
 
-  // If an employee is found, we need to enrich their record with Google Auth info,
-  // just like the getEmployees() function does, so the return type is consistent.
   const authMap = await getEmployeeGoogleAuthMap();
   const authInfo = authMap.get(employee.employee_id);
 
-  // Use your existing `mapEmployee` helper to format the final record.
   return mapEmployee({
     ...employee,
     email: authInfo?.email ?? null,
-    has_google_account: !!authInfo?.googleId,
+    has_google_account: !!authInfo?.googleId
   });
+}
+
+export async function getEmployeeSessionByPasscode(password: number): Promise<SessionEmployee | null> {
+  const employee = await prisma.employee.findFirst({
+    where: {
+      password
+    }
+  });
+
+  if (!employee) {
+    return null;
+  }
+
+  const fullName = `${employee.first_name} ${employee.last_name}`;
+
+  return {
+    employeeId: employee.employee_id,
+    firstName: employee.first_name,
+    lastName: employee.last_name,
+    fullName,
+    email: "",
+    googleId: `pin:${employee.employee_id}`,
+    role: employee.is_manager ? "manager" : "cashier",
+    isManager: employee.is_manager
+  };
 }
 
 export async function getEmployees() {
@@ -79,8 +99,8 @@ export async function addEmployee(firstName: string, lastName: string, email: st
   }
 
   await prisma.$executeRaw`
-    INSERT INTO employee (employee_id, first_name, last_name, is_manager)
-    VALUES (${employeeId}, ${firstName}, ${lastName}, ${isManager})
+    INSERT INTO employee (employee_id, first_name, last_name, is_manager, password)
+    VALUES (${employeeId}, ${firstName}, ${lastName}, ${isManager}, ${password})
   `;
 
   await saveEmployeeGoogleAuthLink({

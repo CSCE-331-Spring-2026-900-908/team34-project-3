@@ -17,6 +17,14 @@ export const loginSchema = z.object({
   password: z.string().trim().min(1, "Enter password")
 });
 
+export const pinLoginSchema = z.object({
+  pin: z
+    .string()
+    .trim()
+    .min(1, "Enter your PIN.")
+    .regex(/^\d+$/, "PIN must be numeric.")
+});
+
 export const ingredientChoiceSchema = z.object({
   ingredientId: z.number().int().positive(),
   quantity: z.number().int().min(1),
@@ -55,7 +63,8 @@ export const employeeFormSchema = z.object({
   firstName: z.string().trim().min(1, "First name cannot be empty."),
   lastName: z.string().trim().min(1, "Last name cannot be empty."),
   email: z.string().trim().email("Enter a valid email address."),
-  isManager: z.boolean()
+  isManager: z.boolean(),
+  password: z.number().int("PIN must be a whole number.").positive("PIN must be positive.")
 });
 
 export const employeeMutationSchema = employeeFormSchema;
