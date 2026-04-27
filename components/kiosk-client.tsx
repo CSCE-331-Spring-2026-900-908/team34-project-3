@@ -17,6 +17,7 @@ import { useOrderStore } from "@/lib/stores/order-store";
 import { cn, formatCurrency } from "@/lib/utils";
 import Chatbot from "@/components/chatbot";
 import { REWARDS_RULES, resolveRedemption, type Redemption } from "@/lib/rewards-rules";
+import { getAllergenTags } from "@/lib/allergens";
 
 const pendingRewardsCheckoutStorageKey = "kiosk-pending-rewards-checkout";
 
@@ -326,6 +327,11 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             .catch(() => {});
     }, [customer]);
 
+    const ingredientNameMap = useMemo(
+        () => new Map(ingredients.map((ing) => [ing.id, ing.name])),
+        [ingredients]
+    );
+
     const cartTotal = useMemo(() => items.reduce((sum, item) => sum + item.cost, 0), [items]);
     const cartAddonTotal = useMemo(
         () =>
@@ -391,10 +397,18 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
 
         return menuItems.filter((item) => {
             const matchesCategory = activeCategory === "All" || getDrinkCategory(item.name) === activeCategory;
-            const matchesSearch = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery);
+            const itemIngredientNames = Object.keys(item.ingredients).map(
+                (id) => ingredientNameMap.get(Number(id)) ?? ""
+            );
+            const allergenTags = getAllergenTags(itemIngredientNames);
+            const matchesSearch =
+                !normalizedQuery ||
+                item.name.toLowerCase().includes(normalizedQuery) ||
+                itemIngredientNames.some((name) => name.toLowerCase().includes(normalizedQuery)) ||
+                allergenTags.some((tag) => tag.includes(normalizedQuery));
             return matchesCategory && matchesSearch;
         });
-    }, [activeCategory, menuItems, searchQuery]);
+    }, [activeCategory, ingredientNameMap, menuItems, searchQuery]);
     const keyboardOpen = searchKeyboardOpen || chatKeyboardOpen;
 
     // All the functions (closeModal, updateIngredient, addSelectedItem, handleCheckout) are
