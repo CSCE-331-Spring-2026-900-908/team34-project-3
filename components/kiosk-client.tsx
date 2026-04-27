@@ -77,6 +77,17 @@ function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: 
 function getDrinkCategory(name: string) {
     const normalized = name.toLowerCase();
 
+    if (
+        normalized.includes("seasonal") ||
+        normalized.includes("pumpkin") ||
+        normalized.includes("peppermint") ||
+        normalized.includes("holiday") ||
+        normalized.includes("winter") ||
+        normalized.includes("summer")
+    ) {
+        return "Seasonal";
+    }
+
     if (normalized.includes("green tea")) {
         return "Green Tea";
     }
@@ -389,7 +400,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }
     const discount = resolved.discount;
     const categories = useMemo(
-        () => ["All", ...Array.from(new Set(menuItems.map((item) => getDrinkCategory(item.name))))],
+        () => ["All", ...Array.from(new Set(["Seasonal", ...menuItems.map((item) => getDrinkCategory(item.name))]))],
         [menuItems]
     );
     const filteredMenuItems = useMemo(() => {
