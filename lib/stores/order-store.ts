@@ -9,6 +9,7 @@ type OrderStore = {
   addItem: (item: OrderItemInput) => void;
   removeItem: (index: number) => void;
   updateItem: (index: number, item: OrderItemInput) => void;
+  replaceItems: (items: OrderItemInput[]) => void;
   clear: () => void;
 };
 
@@ -26,6 +27,10 @@ export const useOrderStore = create<OrderStore>((set) => ({
     set((state) => ({
       items: state.items.map((currentItem, currentIndex) => (currentIndex === index ? item : currentItem))
     })),
+  replaceItems: (items) =>
+    set({
+      items
+    }),
   clear: () =>
     set({
       items: []

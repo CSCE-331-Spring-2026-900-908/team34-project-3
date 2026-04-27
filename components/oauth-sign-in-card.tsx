@@ -7,6 +7,7 @@ type OauthSignInCardProps = {
   title: string;
   description: string;
   googleHref: string;
+  backHref?: string | null;
   helperText: string;
   errorMessage?: string | null;
 };
@@ -16,6 +17,7 @@ export function OauthSignInCard({
   title,
   description,
   googleHref,
+  backHref,
   helperText,
   errorMessage
 }: OauthSignInCardProps) {
@@ -36,10 +38,10 @@ export function OauthSignInCard({
               Continue with Google
             </a>
             <Link
-              href="/"
+              href={backHref ?? "/"}
               className="inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-[rgb(var(--muted))]"
             >
-              Back to Portal
+              Go Back
             </Link>
           </div>
 

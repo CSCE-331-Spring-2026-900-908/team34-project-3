@@ -27,6 +27,7 @@ export function EmployeeManagementClient({ employees }: Props) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isManager, setIsManager] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -66,6 +67,7 @@ export function EmployeeManagementClient({ employees }: Props) {
     setFirstName(employee.firstName);
     setLastName(employee.lastName);
     setEmail(employee.email ?? "");
+    setPassword(employee.password == null ? "" : String(employee.password));
     setIsManager(employee.isManager);
   }
 
@@ -74,6 +76,7 @@ export function EmployeeManagementClient({ employees }: Props) {
     setFirstName("");
     setLastName("");
     setEmail("");
+    setPassword("");
     setIsManager(false);
   }
 
@@ -83,15 +86,27 @@ export function EmployeeManagementClient({ employees }: Props) {
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
     const trimmedEmail = email.trim().toLowerCase();
+    const numericPassword = Number(password.trim());
 
     if (!trimmedFirst || !trimmedLast || !trimmedEmail) {
       toast.error("First name, last name, and email are required.");
       return;
     }
 
+    if (!Number.isInteger(numericPassword) || numericPassword <= 0) {
+      toast.error("PIN must be a positive whole number.");
+      return;
+    }
+
     setSubmitting(true);
 
-    const body = { firstName: trimmedFirst, lastName: trimmedLast, email: trimmedEmail, isManager };
+    const body = {
+      firstName: trimmedFirst,
+      lastName: trimmedLast,
+      email: trimmedEmail,
+      isManager,
+      password: numericPassword
+    };
 
     const url = selectedEmployee
       ? `/api/employees/${selectedEmployee.employeeId}`
@@ -204,7 +219,7 @@ export function EmployeeManagementClient({ employees }: Props) {
                         <Badge className="bg-white text-stone-700">Cashier</Badge>
                       )}
                       <Badge className="bg-white text-stone-700">
-                        {emp.hasGoogleAccount ? "OAuth linked" : "Awaiting first Google sign-in"}
+                        {emp.password == null ? "No PIN" : "PIN set"}
                       </Badge>
                     </div>
                   </CardContent>
@@ -254,8 +269,20 @@ export function EmployeeManagementClient({ employees }: Props) {
                     placeholder="employee@example.com"
                   />
                   <p className="text-sm text-stone-500">
-                    This email controls Google OAuth access for the POS and manager views.
+                    Keep this email for employee records and customer account linking.
                   </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Employee PIN</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    inputMode="numeric"
+                    onChange={(event) => setPassword(event.target.value.replace(/\D/g, ""))}
+                    placeholder="Enter PIN"
+                  />
                 </div>
 
                 <div className="flex items-center gap-3">
