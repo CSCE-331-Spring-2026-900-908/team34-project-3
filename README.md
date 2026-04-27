@@ -1,6 +1,6 @@
-# Boba POS
+# Brew 34
 
-Simple point-of-sale app for a boba shop.
+Simple point-of-sale app for Brew 34.
 
 ## Features
 

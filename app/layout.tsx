@@ -7,8 +7,13 @@ import { PageTranslator } from "@/components/page-translator";
 import { AppToaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: "Boba POS",
-  description: "Basic boba shop point-of-sale app for a school project."
+  title: "Brew 34",
+  description: "Point-of-sale and customer ordering app for Brew 34.",
+  icons: {
+    icon: "/bobashop.png",
+    shortcut: "/bobashop.png",
+    apple: "/bobashop.png"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { portalDestinations } from "@/lib/portal";
@@ -9,9 +10,17 @@ export default function HomePage()
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-8">
       <Card className="w-full max-w-4xl">
-        <CardHeader>
+        <CardHeader className="items-center text-center">
+          <Image
+            src="/logo.jpg"
+            alt="Brew 34 logo"
+            width={360}
+            height={300}
+            priority
+            className="mb-5 h-auto max-h-48 w-auto object-contain"
+          />
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Portal</p>
-          <CardTitle className="text-3xl">Boba Shop Interfaces</CardTitle>
+          <CardTitle className="text-3xl">Brew 34 Interfaces</CardTitle>
           <CardDescription>Select an interface to open.</CardDescription>
         </CardHeader>
         <CardContent>

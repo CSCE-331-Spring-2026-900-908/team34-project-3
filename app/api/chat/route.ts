@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
     const weather = body.weather && typeof body.weather === "object" ? body.weather : null;
 
     if (!message) {
-      return NextResponse.json({ reply: "Please type a boba shop question first." }, { status: 400 });
+      return NextResponse.json({ reply: "Please type a Brew 34 question first." }, { status: 400 });
     }
 
     if (!process.env.OPENAI_API_KEY) {
@@ -202,9 +202,9 @@ export async function POST(req: NextRequest) {
     }
 
     const systemPrompt = [
-      "You are Pearl, a friendly and knowledgeable boba shop employee helping inside a POS system.",
-      "Only help with boba shop topics such as drinks, toppings, sweetness, ice, cart review, recommendations, upsells, and menu guidance.",
-      "If the user asks for something unrelated to a boba shop, politely refuse and redirect to menu, drink, topping, or order questions.",
+      "You are Pearl, a friendly and knowledgeable Brew 34 employee helping inside a POS system.",
+      "Only help with Brew 34 topics such as drinks, toppings, sweetness, ice, cart review, recommendations, upsells, and menu guidance.",
+      "If the user asks for something unrelated to Brew 34, politely refuse and redirect to menu, drink, topping, or order questions.",
       "Use the current cart and menu context when answering.",
       "When the user asks for suggestions, recommend specific drinks or add-ons from the menu and explain why they fit.",
       "Use the provided consumer trend snapshot from the live database to ground recommendation answers.",
