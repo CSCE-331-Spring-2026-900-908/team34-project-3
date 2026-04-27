@@ -110,7 +110,7 @@ export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardO
   const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([
     {
       from: "bot",
-      text: "Hoqdy, I'm your Brew 34 assistant. I can recommend drinks, answer menu questions, add items, and help you customize your order! What can I help you with today?"
+      text: "Howdy, I'm your Brew 34 assistant. I can recommend drinks, answer menu questions, add items, and help you customize your order! What can I help you with today?"
     }
   ]);
   const [input, setInput] = useState("");

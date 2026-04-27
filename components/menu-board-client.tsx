@@ -85,7 +85,7 @@ export function MenuBoardClient({ menuItems, ingredients }: MenuBoardClientProps
             <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
               <section className="h-fit rounded-[1rem] border border-border bg-[rgb(var(--surface))] p-3 shadow-sm">
                 <div className="mb-2">
-                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Pictures</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-500">Featured</p>
                   <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">Drink Photos</h2>
                 </div>
 
