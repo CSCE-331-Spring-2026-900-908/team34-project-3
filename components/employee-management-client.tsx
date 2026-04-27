@@ -10,6 +10,7 @@ import {
   ManagerScrollArea,
   ManagerSelect
 } from "@/components/manager-primitives";
+import { SectionSkipLink } from "@/components/skip-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -166,7 +167,8 @@ export function EmployeeManagementClient({ employees }: Props) {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       {/* Left: Employee list */}
-      <section className="space-y-4">
+      <section id="employee-list" className="relative space-y-4">
+        <SectionSkipLink targetId="employee-form" label="Skip to employee form" />
           <ManagerPaneHeader
             title="Employees"
             action={(
@@ -230,7 +232,7 @@ export function EmployeeManagementClient({ employees }: Props) {
       </section>
 
       {/* Right: Employee form */}
-      <section>
+      <section id="employee-form" className="relative">
           <Card>
             <CardHeader>
               <CardTitle>
