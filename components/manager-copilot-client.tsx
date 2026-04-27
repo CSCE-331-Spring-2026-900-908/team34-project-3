@@ -88,7 +88,7 @@ const quickPrompts = [
   "What should I restock today?",
   "What are the top selling items today?",
   "Create a shift brief for today's manager handoff.",
-  "Give me a chart of the last month's sales by item."
+  "Give me a chart of the last month's sales by day."
 ];
 
 const documentCategories = ["Instruction", "Manager Note", "SOP", "Vendor", "Promotion"];
@@ -168,7 +168,7 @@ function ArtifactCard({ artifact }: { artifact: Exclude<ArtifactResult, null> })
       <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-white">
         <div className="border-b border-border bg-[rgb(var(--surface-alt))] px-4 py-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">
-            Interactive HTML Demo
+            HTML Rendering
           </p>
           <h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{artifact.title}</h3>
           {artifact.subtitle ? <p className="mt-1 text-sm text-stone-600">{artifact.subtitle}</p> : null}

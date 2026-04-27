@@ -95,6 +95,8 @@ type AdditionalIngredientRow = {
 };
 
 const model = process.env.MANAGER_COPILOT_MODEL ?? "gpt-4o-mini";
+const managerCopilotFinalMaxTokens = Number(process.env.MANAGER_COPILOT_FINAL_MAX_TOKENS ?? 900);
+const managerCopilotHtmlMaxTokens = Number(process.env.MANAGER_COPILOT_HTML_MAX_TOKENS ?? 12000);
 const SQL_SCHEMA_GUIDE = [
   "auth_user(email, google_id, employee_id, full_name, first_name, last_name, picture, created_at, updated_at, last_signed_in_at)",
   "orders(order_id, employee_id, created_at, cost)",
@@ -168,6 +170,10 @@ function wantsChart(message: string) {
 function wantsHtmlDemo(message: string) {
   return /\b(html|interactive|demo|demonstration|tutorial|walkthrough|simulation)\b/i.test(message) &&
     /\b(generate|create|build|make|render|show)\b/i.test(message);
+}
+
+function wantsRenderedBrief(message: string) {
+  return /\b(shift brief|manager handoff|handoff brief|brief for.*handoff|daily brief)\b/i.test(message);
 }
 
 function wantsNextWeekForecast(message: string) {
@@ -756,6 +762,8 @@ export async function POST(request: Request) {
 
   const recentIntentText = [...history.slice(-4).map((entry) => entry.content), message].join("\n");
   const htmlDemoRequested = wantsHtmlDemo(message) || wantsHtmlDemo(recentIntentText);
+  const renderedBriefRequested = wantsRenderedBrief(message) || wantsRenderedBrief(recentIntentText);
+  const htmlArtifactRequested = htmlDemoRequested || renderedBriefRequested;
   const instructionContext = await getManagerInstructionContext();
   const chatId =
     requestedChatId ??
@@ -858,11 +866,13 @@ export async function POST(request: Request) {
     });
   }
 
-  if (htmlDemoRequested) {
+  if (htmlArtifactRequested) {
     messages.splice(1, 0, {
       role: "system",
       content:
-        "This request asks for an interactive HTML demo or tutorial. You should satisfy it by returning an html_demo artifact in the final response. Do not refuse by saying you cannot generate HTML; this app can render sandboxed HTML artifacts."
+        renderedBriefRequested
+          ? "This request asks for a manager shift brief or handoff. You should satisfy it by returning an html_demo artifact in the final response so the app renders the brief in the sandboxed iframe."
+          : "This request asks for an interactive HTML demo or tutorial. You should satisfy it by returning an html_demo artifact in the final response. Do not refuse by saying you cannot generate HTML; this app can render sandboxed HTML artifacts."
     });
   }
 
@@ -1131,13 +1141,13 @@ export async function POST(request: Request) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: htmlDemoRequested ? 3500 : 450,
-      response_format: {
-        type: "json_object"
-      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        max_tokens: htmlArtifactRequested ? managerCopilotHtmlMaxTokens : managerCopilotFinalMaxTokens,
+        response_format: {
+          type: "json_object"
+        },
       messages: [
         {
           role: "system",
@@ -1148,8 +1158,10 @@ export async function POST(request: Request) {
             "The reasoningSummary should be a short, safe summary of how the conclusion was reached.",
             "Do not say you will check, look up, retrieve, or analyze something unless the final answer also gives the completed result. Report what was already done.",
             htmlDemoRequested
-              ? "The user asked for an interactive HTML demo/tutorial. Return an html_demo artifact with complete self-contained HTML. Include inline CSS and small inline JavaScript for interactions such as tabs, checklists, quizzes, sliders, or step navigation. Keep the reply short. Do not include fake charts, external resources, URLs, iframes, forms, network requests, cookies, or localStorage."
-              : "Use html_demo artifacts when an interactive tutorial, simulation, or demonstration would be more useful than plain text.",
+              ? "The user asked for an interactive HTML demo/tutorial. Return an html_demo artifact with complete self-contained HTML. Include inline CSS and small inline JavaScript for interactions such as tabs, checklists, quizzes, sliders, or step navigation. Keep the reply short, but do not truncate the HTML or leave tags, scripts, styles, or JSON strings unfinished. Do not include fake charts, external resources, URLs, iframes, forms, network requests, cookies, or localStorage."
+              : renderedBriefRequested
+                ? "The user asked for a shift brief or manager handoff. Return an html_demo artifact with complete self-contained HTML that renders a polished handoff card. Use inline CSS only unless a tiny inline script is truly necessary. Include the sales metrics, top items, inventory alerts, and clear next-shift notes from the completed tool results. Keep the reply short, but do not truncate the HTML or leave tags, styles, or JSON strings unfinished. Do not include external resources, URLs, iframes, forms, network requests, cookies, or localStorage."
+                : "Use html_demo artifacts when an interactive tutorial, simulation, or demonstration would be more useful than plain text.",
             "Use artifact when the user asked for a brief, report, comparison, summary, or action plan, or when a richer structured presentation would clearly help.",
             "If artifact is not useful, return null for artifact.",
             "Do not reveal hidden private chain-of-thought. Summarize only the evidence and tool usage at a high level.",
