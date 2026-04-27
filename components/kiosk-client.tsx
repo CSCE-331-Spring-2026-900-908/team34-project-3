@@ -116,6 +116,12 @@ function getDrinkCategory(name: string) {
         return "Slushes";
     }
 
+    if (
+        normalized.includes("hot")
+    ) {
+        return "Hot Drinks";
+    }
+
     if (normalized.includes("green tea")) {
         return "Green Tea";
     }
@@ -158,6 +164,7 @@ function isCaffeinatedDrink(name: string) {
         normalized.includes("tea") ||
         normalized.includes("matcha") ||
         normalized.includes("latte") ||
+        normalized.includes("mocha") ||
         normalized.includes("coffee") ||
         normalized.includes("espresso") ||
         normalized.includes("oolong") ||
