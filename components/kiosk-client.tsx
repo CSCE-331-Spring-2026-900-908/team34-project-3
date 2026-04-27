@@ -20,6 +20,7 @@ import { REWARDS_RULES, resolveRedemption, type Redemption } from "@/lib/rewards
 import { getAllergenTags } from "@/lib/allergens";
 
 const pendingRewardsCheckoutStorageKey = "kiosk-pending-rewards-checkout";
+const defaultMenuCategories = ["Seasonal", "Hot Drinks", "Slushes"];
 
 // --- REPURPOSED FOR KIOSK (Props) ---
 // The props are changed to accept a `customer` object instead of an `employee` object.
@@ -95,6 +96,15 @@ function getDrinkCategory(name: string) {
         return "Seasonal";
     }
 
+    if (
+        normalized.includes("slush") ||
+        normalized.includes("slushie") ||
+        normalized.includes("smoothie") ||
+        normalized.includes("freeze")
+    ) {
+        return "Slushes";
+    }
+
     if (normalized.includes("green tea")) {
         return "Green Tea";
     }
@@ -128,6 +138,21 @@ function getDrinkCategory(name: string) {
     }
 
     return "Specialty";
+}
+
+function isCaffeinatedDrink(name: string) {
+    const normalized = name.toLowerCase();
+
+    return (
+        normalized.includes("tea") ||
+        normalized.includes("matcha") ||
+        normalized.includes("latte") ||
+        normalized.includes("coffee") ||
+        normalized.includes("espresso") ||
+        normalized.includes("oolong") ||
+        normalized.includes("chai") ||
+        normalized.includes("thai")
+    );
 }
 
 // --- REPURPOSED FOR KIOSK (Component Definition) ---
@@ -409,7 +434,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }
     const discount = resolved.discount;
     const categories = useMemo(
-        () => ["All", ...Array.from(new Set(["Seasonal", ...menuItems.map((item) => getDrinkCategory(item.name))]))],
+        () => ["All", ...Array.from(new Set([...defaultMenuCategories, ...menuItems.map((item) => getDrinkCategory(item.name))]))],
         [menuItems]
     );
     const filteredMenuItems = useMemo(() => {
@@ -909,8 +934,13 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                             key={item.id}
                                             type="button"
                                             onClick={() => openAddItemModal(item)}
-                                            className="group flex flex-col text-left overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition-all hover:shadow-lg hover:border-blue-500"
+                                            className="group relative flex flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-left shadow-sm transition-all hover:border-blue-500 hover:shadow-lg"
                                         >
+                                            {isCaffeinatedDrink(item.name) ? (
+                                                <span className="absolute left-2 top-2 z-10 rounded bg-white px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wide text-amber-900 shadow-sm ring-1 ring-amber-300">
+                                                    caffeinated
+                                                </span>
+                                            ) : null}
                                             {/* Placeholder Image using the new `imageUrl` field */}
                                             <img
                                                 src={item.imageUrl}
