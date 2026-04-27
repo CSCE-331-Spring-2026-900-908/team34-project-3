@@ -59,6 +59,13 @@ const iceOptions = [
     { label: "Extra", value: 3 }
 ] as const;
 
+const sizeOptions = [
+    { value: 0, label: "Small" },
+    { value: 1, label: "Medium" },
+    { value: 2, label: "Large" }
+] as const;
+type DrinkSize = (typeof sizeOptions)[number]["value"];
+
 type SelectedIngredientState = Record<number, number>;
 
 function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: SelectedIngredientState, ingredients: IngredientRecord[]) {
@@ -135,6 +142,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [quantity, setQuantity] = useState(1);
     const [sweetness, setSweetness] = useState<(typeof sweetnessOptions)[number]>(100);
     const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
+    const [size, setSize] = useState<DrinkSize>(0);
     const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
     const [checkoutPending, setCheckoutPending] = useState(false);
     const [chatbotOpen, setChatbotOpen] = useState(false);
@@ -163,6 +171,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             setQuantity(1);
             setSweetness(100);
             setIce(2);
+            setSize(0);
             setSelectedIngredients({});
             setModalTranslations(null);
             return;
@@ -399,6 +408,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 : 100
         );
         setIce([0, 1, 2, 3].includes(cartItem.ice) ? (cartItem.ice as 0 | 1 | 2 | 3) : 2);
+        setSize(0);
         setSelectedIngredients(
             cartItem.ingredientChoices.reduce<SelectedIngredientState>((accumulator, choice) => {
                 accumulator[choice.ingredientId] = choice.quantity;
@@ -981,6 +991,29 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         <Button variant="outline" size="icon" onClick={() => setQuantity((current) => Math.min(20, current + 1))}>
                                             <Plus className="h-4 w-4" />
                                         </Button>
+                                    </div>
+                                </section>
+
+                                <section className="space-y-3">
+                                    <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">
+                                        Size
+                                    </h3>
+                                    <div className="flex flex-wrap gap-2">
+                                        {sizeOptions.map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => setSize(option.value)}
+                                                className={cn(
+                                                    "rounded-2xl border px-4 py-2.5 text-sm font-medium transition",
+                                                    size === option.value
+                                                        ? "border-foreground bg-foreground text-white"
+                                                        : "border-border bg-white text-foreground hover:bg-[rgb(var(--muted))]"
+                                                )}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
                                     </div>
                                 </section>
 
