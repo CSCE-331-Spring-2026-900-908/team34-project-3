@@ -93,8 +93,8 @@ export function EmployeeManagementClient({ employees }: Props) {
       return;
     }
 
-    if (!Number.isInteger(numericPassword) || numericPassword <= 0) {
-      toast.error("PIN must be a positive whole number.");
+    if (!/^\d{4}$/.test(password.trim()) || !Number.isInteger(numericPassword)) {
+      toast.error("PIN must be exactly 4 digits.");
       return;
     }
 
@@ -280,8 +280,9 @@ export function EmployeeManagementClient({ employees }: Props) {
                     type="password"
                     value={password}
                     inputMode="numeric"
+                    maxLength={4}
                     onChange={(event) => setPassword(event.target.value.replace(/\D/g, ""))}
-                    placeholder="Enter PIN"
+                    placeholder="Enter 4-digit PIN"
                   />
                 </div>
 

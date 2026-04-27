@@ -11,9 +11,10 @@ export async function POST(request: Request) {
     }
 
     const numericPin = Number(String(pin).trim());
+    const normalizedPin = String(pin).trim();
 
-    if (!Number.isInteger(numericPin)) {
-      return NextResponse.json({ error: "PIN must be numeric." }, { status: 400 });
+    if (!/^\d{4}$/.test(normalizedPin) || !Number.isInteger(numericPin)) {
+      return NextResponse.json({ error: "PIN must be exactly 4 digits." }, { status: 400 });
     }
 
     const employee = await getEmployeeSessionByPasscode(numericPin);

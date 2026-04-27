@@ -12,12 +12,13 @@ import { pinLoginSchema } from "@/lib/validation";
 
 type LoginFormProps = {
   nextPath: string;
+  initialError?: string | null;
 };
 
-export function LoginForm({ nextPath }: LoginFormProps) {
+export function LoginForm({ nextPath, initialError }: LoginFormProps) {
   const router = useRouter();
   const [pin, setPin] = useState("");
-  const [inlineError, setInlineError] = useState("");
+  const [inlineError, setInlineError] = useState(initialError ?? "");
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -65,6 +66,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
           value={pin}
           inputMode="numeric"
           autoComplete="one-time-code"
+          maxLength={4}
           onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))}
         />
       </div>

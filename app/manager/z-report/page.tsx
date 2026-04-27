@@ -10,7 +10,7 @@ import { getZReportData } from "@/lib/db/reports";
 import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function ZReportPage() {
-  const employee = await requireEmployeePage();
+  const employee = await requireEmployeePage("/manager/z-report");
 
   if (!employee.isManager) {
     redirect("/pos");

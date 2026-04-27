@@ -10,7 +10,7 @@ import { getAllIngredients, getCriticalIngredients, getRestockOrders } from "@/l
 import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function InventoryPage() {
-  const employee = await requireEmployeePage();
+  const employee = await requireEmployeePage("/manager/inventory");
 
   if (!employee.isManager) redirect("/pos");
 

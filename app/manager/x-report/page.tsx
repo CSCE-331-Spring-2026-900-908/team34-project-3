@@ -10,7 +10,7 @@ import { getXReportData } from "@/lib/db/reports";
 import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function XReportPage() {
-  const employee = await requireEmployeePage();
+  const employee = await requireEmployeePage("/manager/x-report");
 
   if (!employee.isManager) {
     redirect("/pos");

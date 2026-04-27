@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 
 import { getSessionCustomer, getSessionEmployee } from "@/lib/session";
 
-export async function requireEmployeePage() {
+export async function requireEmployeePage(nextPath = "/pos") {
   const employee = await getSessionEmployee();
 
   if (!employee) {
-    redirect("/login");
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
 
   return employee;

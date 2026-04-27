@@ -10,7 +10,7 @@ import { getRestockOrderById } from "@/lib/db/inventory";
 import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
-  const employee = await requireEmployeePage();
+  const employee = await requireEmployeePage("/manager/inventory");
 
   if (!employee.isManager) redirect("/pos");
 

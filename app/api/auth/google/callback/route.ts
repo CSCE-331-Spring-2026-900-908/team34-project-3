@@ -34,8 +34,12 @@ function loginErrorUrl(request: NextRequest, loginPath: string | null, error: st
   return url;
 }
 
-function requiresEmployeeAccess(nextPath: string | null) {
-  return !!nextPath && (nextPath.startsWith("/pos") || nextPath.startsWith("/manager"));
+function requiresCashierPin(nextPath: string | null) {
+  return !!nextPath && nextPath.startsWith("/pos");
+}
+
+function requiresManagerAccess(nextPath: string | null) {
+  return !!nextPath && nextPath.startsWith("/manager");
 }
 
 export async function GET(request: NextRequest) {
@@ -50,6 +54,10 @@ export async function GET(request: NextRequest) {
 
   if (!code || !state || !authState || state !== authState) {
     return NextResponse.redirect(loginErrorUrl(request, loginPath, "state", nextPath));
+  }
+
+  if (requiresCashierPin(nextPath)) {
+    return NextResponse.redirect(loginErrorUrl(request, loginPath, "employee_oauth_disabled", nextPath));
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -110,13 +118,13 @@ export async function GET(request: NextRequest) {
       picture: profile.picture
     });
 
-    if (requiresEmployeeAccess(nextPath)) {
-      if (!resolvedUser.employee) {
-        return NextResponse.redirect(loginErrorUrl(request, loginPath, "employee_access", nextPath));
+    if (requiresManagerAccess(nextPath)) {
+      if (!resolvedUser.employee || !resolvedUser.employee.isManager) {
+        return NextResponse.redirect(loginErrorUrl(request, loginPath, "manager_access", nextPath));
       }
 
       await saveEmployeeSession(resolvedUser.employee);
-      return NextResponse.redirect(new URL(nextPath ?? "/pos", request.url));
+      return NextResponse.redirect(new URL(nextPath ?? "/manager", request.url));
     }
 
     await saveCustomerSession(resolvedUser.customer);

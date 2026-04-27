@@ -9,7 +9,7 @@ import { requireEmployeePage } from "@/lib/auth";
 import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function ManagerInsightsPage() {
-  const employee = await requireEmployeePage();
+  const employee = await requireEmployeePage("/manager/insights");
 
   if (!employee.isManager) {
     redirect("/pos");

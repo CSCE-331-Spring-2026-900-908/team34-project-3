@@ -13,7 +13,7 @@ export const portalDestinations: PortalDestination[] = [
   {
     title: "Manager",
     description: "Inventory and manager tools.",
-    href: "/login?next=/manager"
+    href: "/api/auth/google/start?next=/manager&login=/login"
   },
   {
     title: "Customer Kiosk",

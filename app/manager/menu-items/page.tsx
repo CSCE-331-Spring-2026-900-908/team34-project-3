@@ -11,7 +11,7 @@ import { getAllIngredients } from "@/lib/db/inventory";
 import { getManagerNavLinks } from "@/lib/manager-nav";
 
 export default async function MenuItemsPage() {
-  const employee = await requireEmployeePage();
+  const employee = await requireEmployeePage("/manager/menu-items");
 
   if (!employee.isManager) redirect("/pos");
 

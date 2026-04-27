@@ -11,6 +11,10 @@ function getDefaultLoginPath(nextPath: string) {
   return nextPath.startsWith("/kiosk") ? "/customer-login" : "/login";
 }
 
+function requiresCashierPin(nextPath: string) {
+  return nextPath.startsWith("/pos");
+}
+
 export async function GET(request: NextRequest) {
   const nextPath = sanitizeInternalRedirect(request.nextUrl.searchParams.get("next") ?? undefined, "/kiosk");
   const loginPath = sanitizeInternalRedirect(
@@ -18,6 +22,10 @@ export async function GET(request: NextRequest) {
     getDefaultLoginPath(nextPath)
   );
   const clientId = process.env.GOOGLE_CLIENT_ID;
+
+  if (requiresCashierPin(nextPath)) {
+    return NextResponse.redirect(new URL(`${loginPath}?error=employee_oauth_disabled`, request.url));
+  }
 
   if (!clientId) {
     return NextResponse.redirect(new URL(`${loginPath}?error=config`, request.url));
