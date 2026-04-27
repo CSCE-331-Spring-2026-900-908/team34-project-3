@@ -13,6 +13,7 @@ type CartItem = {
   quantity: number;
   sweetness: number;
   ice: number;
+  size: number;
   cost: number;
   ingredientChoices: Array<{
     name: string;
@@ -43,24 +44,30 @@ type ChatAction =
   | {
       type: "none";
     }
-  | {
+  | AddToCartAction
+  | EditCartItemAction;
+
+type AddToCartAction = {
       type: "add_to_cart";
       itemName: string;
       quantity?: number;
       sweetness?: number;
       ice?: number;
+      size?: number;
       extras?: Array<{
         name: string;
         quantity?: number;
       }>;
-    }
-  | {
+    };
+
+type EditCartItemAction = {
       type: "edit_cart_item";
       cartIndex: number;
       itemName?: string;
       quantity?: number;
       sweetness?: number;
       ice?: number;
+      size?: number;
       extras?: Array<{
         name: string;
         quantity?: number;
@@ -69,6 +76,7 @@ type ChatAction =
 
 const validSweetnessLevels = [0, 25, 50, 75, 100, 125] as const;
 const validIceLevels = [0, 1, 2, 3] as const;
+const validSizeLevels = [0, 1, 2] as const;
 
 function formatMoney(amount: number) {
   return `$${amount.toFixed(2)}`;
@@ -82,6 +90,29 @@ function userSpecifiedIce(message: string) {
   return /\bice\b/i.test(message);
 }
 
+function userSpecifiedSize(message: string) {
+  return /\b(size|small|medium|large)\b/i.test(message);
+}
+
+function normalizeAddAction(action: AddToCartAction, message: string): AddToCartAction {
+  const sweetnessSource = userSpecifiedSweetness(message) ? action.sweetness : 100;
+  const normalizedSweetness = validSweetnessLevels.includes(sweetnessSource as (typeof validSweetnessLevels)[number])
+    ? sweetnessSource
+    : 100;
+
+  const iceSource = userSpecifiedIce(message) ? action.ice : 2;
+  const normalizedIce = validIceLevels.includes(iceSource as (typeof validIceLevels)[number]) ? iceSource : 2;
+  const sizeSource = userSpecifiedSize(message) ? action.size : 0;
+  const normalizedSize = validSizeLevels.includes(sizeSource as (typeof validSizeLevels)[number]) ? sizeSource : 0;
+
+  return {
+    ...action,
+    sweetness: normalizedSweetness,
+    ice: normalizedIce,
+    size: normalizedSize
+  };
+}
+
 function normalizeAction(action: ChatAction | undefined, message: string): ChatAction {
   if (!action || action.type === "none") {
     return { type: "none" };
@@ -91,19 +122,17 @@ function normalizeAction(action: ChatAction | undefined, message: string): ChatA
     return action;
   }
 
-  const sweetnessSource = userSpecifiedSweetness(message) ? action.sweetness : 100;
-  const normalizedSweetness = validSweetnessLevels.includes(sweetnessSource as (typeof validSweetnessLevels)[number])
-    ? sweetnessSource
-    : 100;
+  return normalizeAddAction(action, message);
+}
 
-  const iceSource = userSpecifiedIce(message) ? action.ice : 2;
-  const normalizedIce = validIceLevels.includes(iceSource as (typeof validIceLevels)[number]) ? iceSource : 2;
+function normalizeActions(actions: ChatAction[] | undefined, message: string) {
+  if (!Array.isArray(actions)) {
+    return [];
+  }
 
-  return {
-    ...action,
-    sweetness: normalizedSweetness,
-    ice: normalizedIce
-  };
+  return actions
+    .map((action) => normalizeAction(action, message))
+    .filter((action): action is Exclude<ChatAction, { type: "none" }> => action.type !== "none");
 }
 
 function describeIceLevel(ice: number) {
@@ -118,6 +147,19 @@ function describeIceLevel(ice: number) {
       return "Extra Ice";
     default:
       return `Ice Level ${ice}`;
+  }
+}
+
+function describeSize(size: number) {
+  switch (size) {
+    case 0:
+      return "Small";
+    case 1:
+      return "Medium";
+    case 2:
+      return "Large";
+    default:
+      return "Unknown Size";
   }
 }
 
@@ -143,6 +185,7 @@ function buildCartSummary(cartItems: CartItem[]) {
     return [
       `cart line ${item.cartIndex ?? 0}`,
       `${item.quantity}x ${item.itemName}`,
+      `size ${describeSize(item.size)}`,
       `sweetness ${item.sweetness}%`,
       describeIceLevel(item.ice),
       extras,
@@ -214,15 +257,21 @@ export async function POST(req: NextRequest) {
       "If the cart already has items, suggest complementary drinks, topping tweaks, or sweetness/ice adjustments.",
       "You may help add drinks to the cart by returning an add_to_cart action only when the user clearly asks to add an item.",
       "You may help edit an existing cart drink by returning an edit_cart_item action when the user clearly asks to change a drink already in the cart.",
+      "If the user asks to add multiple drinks at once, return an actions array with multiple add_to_cart actions (one per drink).",
+      "If the user asks to edit multiple cart drinks at once, return an actions array with multiple edit_cart_item actions (one per cart line).",
+      "If the user directly asks to add drink(s), do not ask for confirmation again. Return add_to_cart action(s) immediately.",
       "Use the provided cart line number to target the correct existing drink.",
       "Only use exact menu item names and exact extra ingredient names from the provided lists.",
-      "When creating add_to_cart actions, assume sweetness 100 and ice 2 (regular ice) unless the user explicitly asks for different sweetness or ice.",
+      "Use size values: 0=Small, 1=Medium, 2=Large.",
+      "When creating add_to_cart actions, assume sweetness 100, ice 2 (regular ice), and size 0 (small) unless the user explicitly asks for different values.",
       "If details like quantity or extras are not specified, use sensible defaults: quantity 1 and extras [].",
       "If the user is ambiguous about which drink to add, ask a follow-up question instead of creating an action.",
       "If the user is ambiguous about which cart item to edit, ask a follow-up question instead of creating an action.",
+      "If you ask a confirmation question before adding a drink, set action to {\"type\":\"none\"}.",
+      "Only return add_to_cart when you are actually performing the add request now.",
       "Do not invent unavailable products or claim to complete payment, modify inventory, or place orders yourself.",
       "Keep answers short, warm, and practical, like an employee helping a customer at the counter.",
-      'Return valid JSON with this shape: {"reply":"string","action":{"type":"none"}}, {"reply":"string","action":{"type":"add_to_cart","itemName":"string","quantity":1,"sweetness":100,"ice":2,"extras":[{"name":"Boba","quantity":1}]}} or {"reply":"string","action":{"type":"edit_cart_item","cartIndex":1,"itemName":"Taro Milk Tea","quantity":2,"sweetness":50,"ice":1,"extras":[{"name":"Boba","quantity":1}]}}.',
+      'Return valid JSON with one of these shapes: {"reply":"string","action":{"type":"none"}}, {"reply":"string","action":{"type":"add_to_cart","itemName":"string","quantity":1,"sweetness":100,"ice":2,"size":0,"extras":[{"name":"Boba","quantity":1}]}}, {"reply":"string","action":{"type":"edit_cart_item","cartIndex":1,"itemName":"Taro Milk Tea","quantity":2,"sweetness":50,"ice":1,"size":2,"extras":[{"name":"Boba","quantity":1}]}} or {"reply":"string","actions":[{"type":"add_to_cart","itemName":"Taro Milk Tea","quantity":1,"sweetness":100,"ice":2,"size":0,"extras":[]},{"type":"add_to_cart","itemName":"Thai Tea","quantity":1,"sweetness":100,"ice":2,"size":0,"extras":[]}]}',
       `Menu items: ${buildMenuSummary(menuItems)}`,
       `Available extra ingredients: ${buildIngredientSummary(ingredients)}`,
       `Current cart:\n${buildCartSummary(cartItems)}`,
@@ -273,24 +322,28 @@ export async function POST(req: NextRequest) {
     }
 
     const content = data.choices?.[0]?.message?.content;
-    let parsed: { reply?: string; action?: ChatAction } | null = null;
+    let parsed: { reply?: string; action?: ChatAction; actions?: ChatAction[] } | null = null;
 
     if (typeof content === "string") {
       try {
-        parsed = JSON.parse(content) as { reply?: string; action?: ChatAction };
+        parsed = JSON.parse(content) as { reply?: string; action?: ChatAction; actions?: ChatAction[] };
       } catch {
         parsed = { reply: content, action: { type: "none" } };
       }
     }
 
     const reply = parsed?.reply?.trim();
-    const action = normalizeAction(parsed?.action, message);
+    const actions = normalizeActions(parsed?.actions, message);
+    const fallbackAction = normalizeAction(parsed?.action, message);
+    const mergedActions = actions.length > 0 ? actions : fallbackAction.type === "none" ? [] : [fallbackAction];
+    const action = mergedActions[0] ?? ({ type: "none" } as const);
 
     return NextResponse.json({
       reply:
         reply ??
         "I can help with drinks, toppings, cart questions, and boba suggestions. What would you like to order?",
-      action
+      action,
+      actions: mergedActions
     });
   } catch {
     return NextResponse.json(
