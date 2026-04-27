@@ -270,6 +270,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
       quantity,
       sweetness,
       ice,
+      size: 0 as const,
       ingredientChoices: ingredients
         .filter((ingredient) => (selectedIngredients[ingredient.id] ?? 0) > 0)
         .map((ingredient) => ({

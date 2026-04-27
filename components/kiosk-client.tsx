@@ -70,15 +70,26 @@ const sizeOptions = [
 ] as const;
 type DrinkSize = (typeof sizeOptions)[number]["value"];
 
+const SIZE_MULTIPLIER: Record<DrinkSize, number> = { 0: 1, 1: 1.2, 2: 1.4 };
+
+const sizeLabel = (size: number) =>
+    sizeOptions.find((option) => option.value === size)?.label ?? "Small";
+
 type SelectedIngredientState = Record<number, number>;
 
-function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: SelectedIngredientState, ingredients: IngredientRecord[]) {
+function lineTotal(
+    item: MenuItemRecord,
+    quantity: number,
+    selectedIngredients: SelectedIngredientState,
+    ingredients: IngredientRecord[],
+    size: DrinkSize
+) {
     const addOnTotal = ingredients.reduce((sum, ingredient) => {
         const ingredientQuantity = selectedIngredients[ingredient.id] ?? 0;
         return sum + ingredient.addCost * ingredientQuantity;
     }, 0);
 
-    return (item.cost + addOnTotal) * quantity;
+    return (item.cost + addOnTotal) * quantity * SIZE_MULTIPLIER[size];
 }
 // End of copied block from POS //
 
@@ -493,7 +504,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 : 100
         );
         setIce([0, 1, 2, 3].includes(cartItem.ice) ? (cartItem.ice as 0 | 1 | 2 | 3) : 2);
-        setSize(0);
+        setSize(([0, 1, 2] as const).includes(cartItem.size as DrinkSize) ? (cartItem.size as DrinkSize) : 0);
         setSelectedIngredients(
             cartItem.ingredientChoices.reduce<SelectedIngredientState>((accumulator, choice) => {
                 accumulator[choice.ingredientId] = choice.quantity;
@@ -538,8 +549,9 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             quantity,
             sweetness,
             ice,
+            size,
             ingredientChoices,
-            cost: lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients)
+            cost: lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients, size)
         };
 
         if (editingItemIndex !== null) {
@@ -994,7 +1006,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                             >
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0">
-                                                        <div className="font-semibold">{item.itemName}</div>
+                                                        <div className="font-semibold">{sizeLabel(item.size)} {item.itemName}</div>
                                                         <div className="mt-1 text-sm text-stone-600">
                                                             Qty {item.quantity} | Sweet {item.sweetness}% | Ice {item.ice}
                                                         </div>
@@ -1323,7 +1335,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                     <div className="flex items-center justify-between">
                                         <span className="font-medium">{modalTranslations?.itemTotal ?? "Item total"}</span>
                                         <span className="text-2xl font-semibold">
-                                            {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients))}
+                                            {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients, size))}
                                         </span>
                                     </div>
                                 </div>

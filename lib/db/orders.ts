@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import type { OrderItemInput } from "@/lib/types";
 import { addRewardPoints } from "@/lib/db/rewards";
 
+const SIZE_MULTIPLIER: Record<number, number> = { 0: 1, 1: 1.2, 2: 1.4 };
+
 function toLegacyAddonColumns(item: OrderItemInput) {
   const normalizedNames = item.ingredientChoices.map((choice) => ({
     ...choice,
@@ -27,8 +29,9 @@ function computeItemTotal(baseCost: number, item: OrderItemInput) {
     (sum, ingredient) => sum + ingredient.addCost * ingredient.quantity,
     0
   );
+  const multiplier = SIZE_MULTIPLIER[item.size] ?? 1;
 
-  return (baseCost + ingredientCost) * item.quantity;
+  return (baseCost + ingredientCost) * item.quantity * multiplier;
 }
 
 export type OrderPricing = {
@@ -93,6 +96,7 @@ export async function completeCurrentOrder(
 
       const lineCost = computeItemTotal(menuItem.cost.toNumber(), item);
       const legacyAddons = toLegacyAddonColumns(item);
+      const sizeMultiplier = SIZE_MULTIPLIER[item.size] ?? 1;
       total += lineCost;
 
       await tx.orderitem.create({
@@ -122,7 +126,7 @@ export async function completeCurrentOrder(
           },
           data: {
             servings_available: {
-              decrement: new Prisma.Decimal(ingredient.quantity * item.quantity)
+              decrement: new Prisma.Decimal(ingredient.quantity * item.quantity * sizeMultiplier)
             }
           }
         });
@@ -135,7 +139,7 @@ export async function completeCurrentOrder(
           },
           data: {
             servings_available: {
-              decrement: new Prisma.Decimal(choice.quantity * item.quantity)
+              decrement: new Prisma.Decimal(choice.quantity * item.quantity * sizeMultiplier)
             }
           }
         });

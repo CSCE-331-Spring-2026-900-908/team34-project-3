@@ -38,6 +38,7 @@ export const orderItemInputSchema = z.object({
   quantity: z.number().int().min(1),
   sweetness: z.union([z.literal(0), z.literal(25), z.literal(50), z.literal(75), z.literal(100), z.literal(125)]),
   ice: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
+  size: z.union([z.literal(0), z.literal(1), z.literal(2)]),
   ingredientChoices: z.array(ingredientChoiceSchema),
   cost: z.number().nonnegative()
 });

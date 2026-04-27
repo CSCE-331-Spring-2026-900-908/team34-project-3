@@ -207,6 +207,7 @@ export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardO
           quantity,
           sweetness,
           ice,
+          size: 0,
           ingredientChoices,
           cost: (menuItem.cost + addOnCost) * quantity
         });
@@ -262,6 +263,7 @@ export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardO
           quantity,
           sweetness,
           ice,
+          size: existingItem.size,
           ingredientChoices,
           cost: (menuItem.cost + addOnCost) * quantity
         });
