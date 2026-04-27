@@ -45,16 +45,23 @@ const iceOptions = [
   { label: "Regular", value: 2 },
   { label: "Extra", value: 3 }
 ] as const;
+const sizeOptions = [
+  { value: 0, label: "Small" },
+  { value: 1, label: "Medium" },
+  { value: 2, label: "Large" }
+] as const;
+type DrinkSize = (typeof sizeOptions)[number]["value"];
+const SIZE_MULTIPLIER: Record<DrinkSize, number> = { 0: 1, 1: 1.2, 2: 1.4 };
 
 type SelectedIngredientState = Record<number, number>;
 
-function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: SelectedIngredientState, ingredients: IngredientRecord[]) {
+function lineTotal(item: MenuItemRecord, quantity: number, selectedIngredients: SelectedIngredientState, ingredients: IngredientRecord[], size: DrinkSize) {
   const addOnTotal = ingredients.reduce((sum, ingredient) => {
     const ingredientQuantity = selectedIngredients[ingredient.id] ?? 0;
     return sum + ingredient.addCost * ingredientQuantity;
   }, 0);
 
-  return (item.cost + addOnTotal) * quantity;
+  return (item.cost + addOnTotal) * quantity * SIZE_MULTIPLIER[size];
 }
 
 export function PosClient({ employee, menuItems, ingredients }: PosClientProps) {
@@ -70,6 +77,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
   const [quantity, setQuantity] = useState(1);
   const [sweetness, setSweetness] = useState<(typeof sweetnessOptions)[number]>(100);
   const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
+  const [size, setSize] = useState<DrinkSize>(0);
   const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [translatorLanguage, setTranslatorLanguage] = useState("en");
@@ -97,6 +105,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
       setQuantity(1);
       setSweetness(100);
       setIce(2);
+      setSize(0);
       setSelectedIngredients({});
       setModalTranslations(null);
       return;
@@ -235,6 +244,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
         : 100
     );
     setIce([0, 1, 2, 3].includes(cartItem.ice) ? (cartItem.ice as 0 | 1 | 2 | 3) : 2);
+    setSize([0, 1, 2].includes(cartItem.size) ? (cartItem.size as DrinkSize) : 0);
     setSelectedIngredients(
       cartItem.ingredientChoices.reduce<SelectedIngredientState>((accumulator, choice) => {
         accumulator[choice.ingredientId] = choice.quantity;
@@ -270,7 +280,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
       quantity,
       sweetness,
       ice,
-      size: 0 as const,
+      size,
       ingredientChoices: ingredients
         .filter((ingredient) => (selectedIngredients[ingredient.id] ?? 0) > 0)
         .map((ingredient) => ({
@@ -279,7 +289,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
           addCost: ingredient.addCost,
           name: ingredient.name
         })),
-      cost: lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients)
+      cost: lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients, size)
     };
 
     if (editingItemIndex !== null) {
@@ -400,7 +410,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                           <div className="min-w-0">
                             <div className="font-semibold">{item.itemName}</div>
                             <div className="mt-1 text-sm text-stone-600">
-                              Qty {item.quantity} | Sweet {item.sweetness}% | Ice {item.ice}
+                              Qty {item.quantity} | {sizeOptions.find((o) => o.value === item.size)?.label ?? "Small"} | Sweet {item.sweetness}% | Ice {item.ice}
                             </div>
                             <div className="mt-1 text-sm text-stone-500">
                               {item.ingredientChoices.length > 0
@@ -503,6 +513,27 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                 </section>
 
                 <section className="space-y-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">Size</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {sizeOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setSize(option.value)}
+                        className={cn(
+                          "rounded-2xl border px-4 py-2.5 text-sm font-medium transition",
+                          size === option.value
+                            ? "border-foreground bg-foreground text-white"
+                            : "border-border bg-white text-foreground hover:bg-[rgb(var(--muted))]"
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">
                     {modalTranslations?.sweetness ?? "Sweetness"}
                   </h3>
@@ -590,7 +621,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{modalTranslations?.itemTotal ?? "Item total"}</span>
                     <span className="text-2xl font-semibold">
-                      {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients))}
+                      {formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients, size))}
                     </span>
                   </div>
                 </div>
