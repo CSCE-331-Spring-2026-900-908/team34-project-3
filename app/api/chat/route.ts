@@ -67,7 +67,7 @@ type ChatAction =
       }>;
     };
 
-const validSweetnessLevels = [0, 25, 50, 75, 100] as const;
+const validSweetnessLevels = [0, 25, 50, 75, 100, 125] as const;
 const validIceLevels = [0, 1, 2, 3] as const;
 
 function formatMoney(amount: number) {
