@@ -122,6 +122,10 @@ function sanitizeReply(reply: string) {
     .trim();
 }
 
+function containsRawHtml(reply: string) {
+  return /<\s*(?:!doctype|html|head|body|style|script|div|section|article|main|h[1-6]|p|ul|ol|li|table|img|button)\b/i.test(reply);
+}
+
 function sanitizeHtmlDemo(html: unknown) {
   if (typeof html !== "string") {
     return "";
@@ -1155,6 +1159,7 @@ export async function POST(request: Request) {
             "You are formatting a final manager copilot response.",
             'Return JSON with this exact shape: {"reply":"string","reasoningSummary":"string","artifact":null|{"type":"brief"|"comparison","title":"string","subtitle":"string","highlights":["string"],"sections":[{"title":"string","body":"string"}],"metrics":[{"label":"string","value":"string"}]}|{"type":"html_demo","title":"string","subtitle":"string","html":"string"}}',
             "The reply should be concise and useful for a manager.",
+            "Never put raw HTML in the reply field. If you return an html_demo artifact, the reply field must be a short plain-text sentence only.",
             "The reasoningSummary should be a short, safe summary of how the conclusion was reached.",
             "Do not say you will check, look up, retrieve, or analyze something unless the final answer also gives the completed result. Report what was already done.",
             htmlDemoRequested
@@ -1203,19 +1208,23 @@ export async function POST(request: Request) {
     }
   }
 
+  const artifact = normalizeArtifact(assistantPayload?.artifact ?? null);
   const safeReply = sanitizeReply(
     assistantPayload?.reply?.trim() ??
       "I gathered manager context, but I need you to rephrase that request a bit more specifically."
   );
+  const displayReply =
+    artifact?.type === "html_demo" && containsRawHtml(safeReply)
+      ? "I rendered the manager handoff below."
+      : safeReply;
   const safeReasoningSummary =
     assistantPayload?.reasoningSummary?.trim() ??
     "I checked the relevant manager tools and summarized the strongest signals.";
-  const artifact = normalizeArtifact(assistantPayload?.artifact ?? null);
 
   await saveChatMessage({
     chatId,
     role: "assistant",
-    content: safeReply,
+    content: displayReply,
     reasoningSummary: safeReasoningSummary,
     toolTrace,
     knowledgeSources: knowledgeSources.slice(0, 5),
@@ -1225,7 +1234,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     chatId,
-    reply: safeReply,
+    reply: displayReply,
     reasoningSummary: safeReasoningSummary,
     toolTrace,
     knowledgeSources: knowledgeSources.slice(0, 5),

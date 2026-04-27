@@ -168,7 +168,7 @@ function ArtifactCard({ artifact }: { artifact: Exclude<ArtifactResult, null> })
       <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-white">
         <div className="border-b border-border bg-[rgb(var(--surface-alt))] px-4 py-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">
-            HTML Rendering
+            Manager Artifact
           </p>
           <h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{artifact.title}</h3>
           {artifact.subtitle ? <p className="mt-1 text-sm text-stone-600">{artifact.subtitle}</p> : null}
