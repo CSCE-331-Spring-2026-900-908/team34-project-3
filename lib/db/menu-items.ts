@@ -47,8 +47,8 @@ export async function createMenuItem(
   name: string,
   cost: number,
   ingredients: Record<number, number>
-): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+): Promise<number> {
+  return await prisma.$transaction(async (tx) => {
     const item = await tx.item.create({
       data: {
         name,
@@ -67,6 +67,8 @@ export async function createMenuItem(
         }
       });
     }
+
+    return item.id;
   });
 }
 

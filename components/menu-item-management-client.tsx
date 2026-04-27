@@ -10,6 +10,7 @@ import {
   ManagerPaneHeader,
   ManagerScrollArea
 } from "@/components/manager-primitives";
+import { SectionSkipLink } from "@/components/skip-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,8 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
   const [name, setName] = useState("");
   const [rawCost, setRawCost] = useState("");
   const [ingredientQuantities, setIngredientQuantities] = useState<Record<number, number>>({});
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageTimestamp, setImageTimestamp] = useState(() => Date.now());
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [query, setQuery] = useState("");
@@ -49,6 +52,7 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
     setName(item.name);
     setRawCost(String(item.cost));
     setIngredientQuantities({ ...item.ingredients });
+    setImageFile(null);
   }
 
   function clearForm() {
@@ -56,6 +60,47 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
     setName("");
     setRawCost("");
     setIngredientQuantities({});
+    setImageFile(null);
+  }
+
+  async function uploadImage(itemId: number, file: File): Promise<boolean> {
+    const form = new FormData();
+    form.append("image", file);
+    const res = await fetch(`/api/menu-items/${itemId}/image`, { method: "PUT", body: form });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      toast.error(payload?.error ?? "Failed to upload image.");
+      return false;
+    }
+    return true;
+  }
+
+  async function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be 2 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("File must be an image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (selectedItem) {
+      const ok = await uploadImage(selectedItem.id, file);
+      if (ok) {
+        setImageTimestamp(Date.now());
+        toast.success("Image updated.");
+      }
+      event.target.value = "";
+    } else {
+      setImageFile(file);
+    }
   }
 
   function updateIngredient(id: number, delta: number) {
@@ -114,6 +159,13 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
       return;
     }
 
+    if (!selectedItem && imageFile) {
+      const payload = (await response.json().catch(() => null)) as { id?: number } | null;
+      if (payload?.id) {
+        await uploadImage(payload.id, imageFile);
+      }
+    }
+
     toast.success(selectedItem ? "Menu item updated." : "Menu item created.");
     clearForm();
     router.refresh();
@@ -152,7 +204,8 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       {/* Left: Menu item list */}
-      <section className="space-y-4">
+      <section id="menu-item-list" className="relative space-y-4">
+        <SectionSkipLink targetId="menu-item-form" label="Skip to item form" />
           <ManagerPaneHeader
             title="Menu Items"
             action={(
@@ -203,7 +256,7 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
       </section>
 
       {/* Right: Menu item form */}
-      <section>
+      <section id="menu-item-form" className="relative">
           <Card>
             <CardHeader>
               <CardTitle>
@@ -230,6 +283,42 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
                     onChange={(event) => setRawCost(event.target.value)}
                     placeholder="0.00"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="itemImage">Image</Label>
+                  {selectedItem ? (
+                    <div className="space-y-2">
+                      <img
+                        src={`${selectedItem.imageUrl}?t=${imageTimestamp}`}
+                        alt={selectedItem.name}
+                        className="h-28 w-full rounded-lg border border-border object-cover bg-stone-100"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/menu-items/placeholder.png"; }}
+                      />
+                      <input
+                        id="itemImage"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => void handleImageChange(e)}
+                        className="block w-full text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-stone-200"
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <input
+                        id="itemImage"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => void handleImageChange(e)}
+                        className="block w-full text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-stone-200"
+                      />
+                      {imageFile ? (
+                        <p className="text-xs text-stone-500">Staged: {imageFile.name}</p>
+                      ) : (
+                        <p className="text-xs text-stone-400">Optional — uploaded after item is created</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-3">

@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     }
   }
 
-  await createMenuItem(parsed.data.name.trim(), Number(parsed.data.rawCost), ingredientMap);
+  const newId = await createMenuItem(parsed.data.name.trim(), Number(parsed.data.rawCost), ingredientMap);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, id: newId });
 }

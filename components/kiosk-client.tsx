@@ -965,6 +965,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                                 src={item.imageUrl}
                                                 alt={item.name}
                                                 className="w-full h-40 object-cover bg-stone-200"
+                                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/menu-items/placeholder.png"; }}
                                             />
                                             <div className="p-4 flex-1 flex flex-col">
                                                 <div className="flex-1">
