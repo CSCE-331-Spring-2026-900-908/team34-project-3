@@ -192,7 +192,9 @@ export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardO
         }
 
         const quantity = Math.max(1, Math.min(20, Math.round(action.quantity ?? 1)));
-        const sweetness = [0, 25, 50, 75, 100].includes(action.sweetness ?? 100) ? (action.sweetness ?? 100) : 100;
+        const sweetness = [0, 25, 50, 75, 100, 125].includes(action.sweetness ?? 100)
+          ? (action.sweetness ?? 100)
+          : 100;
         const ice = [0, 1, 2, 3].includes(action.ice ?? 2) ? (action.ice ?? 2) : 2;
 
         const ingredientChoices = buildIngredientChoices(action.extras ?? []);
@@ -243,7 +245,7 @@ export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardO
 
         const quantity = Math.max(1, Math.min(20, Math.round(action.quantity ?? existingItem.quantity)));
         const sweetnessSource = action.sweetness ?? existingItem.sweetness;
-        const sweetness = [0, 25, 50, 75, 100].includes(sweetnessSource) ? sweetnessSource : existingItem.sweetness;
+        const sweetness = [0, 25, 50, 75, 100, 125].includes(sweetnessSource) ? sweetnessSource : existingItem.sweetness;
         const iceSource = action.ice ?? existingItem.ice;
         const ice = [0, 1, 2, 3].includes(iceSource) ? iceSource : existingItem.ice;
 

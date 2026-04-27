@@ -38,7 +38,7 @@ type ModalTranslations = {
   addToCart: string;
 };
 
-const sweetnessOptions = [0, 25, 50, 75, 100] as const;
+const sweetnessOptions = [0, 25, 50, 75, 100, 125] as const;
 const iceOptions = [
   { label: "No Ice", value: 0 },
   { label: "Light", value: 1 },
