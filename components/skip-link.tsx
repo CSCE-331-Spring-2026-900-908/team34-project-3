@@ -15,3 +15,14 @@ export function SkipLink({
     </a>
   );
 }
+
+export function SectionSkipLink({ targetId, label }: { targetId: string; label: string }) {
+  return (
+    <a
+      href={`#${targetId}`}
+      className="absolute left-0 top-0 z-10 -translate-y-full rounded-b-lg bg-foreground px-4 py-2 text-sm font-semibold text-[rgb(var(--background))] transition-transform focus:translate-y-0"
+    >
+      {label}
+    </a>
+  );
+}

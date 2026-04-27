@@ -284,13 +284,13 @@ export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardO
   }
 
   return (
-    <div className="border rounded-lg p-3 flex flex-col gap-2 bg-white shadow">
-      <div className="h-40 overflow-y-auto rounded border bg-gray-50 p-2">
+    <div className="border rounded-lg p-3 flex flex-col gap-2 bg-[rgb(var(--surface))] shadow-sm">
+      <div className="h-40 overflow-y-auto rounded border bg-[rgb(var(--surface-alt))] p-2">
         {messages.map((m, i) => (
           <div key={i} className={`mb-2 flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
             <p
               className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-                m.from === "user" ? "border border-stone-200 bg-white text-black" : "bg-black text-white"
+                m.from === "user" ? "border border-border bg-[rgb(var(--surface))] text-foreground" : "bg-foreground text-[rgb(var(--background))]"
               }`}
             >
               {m.text}
@@ -301,7 +301,7 @@ export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardO
 
       <div className="flex gap-2">
         <TouchscreenInput
-          className="flex-1 border rounded p-2"
+          className="flex-1 border border-border rounded p-2"
           value={input}
           onValueChange={setInput}
           onKeyboardOpenChange={onKeyboardOpenChange}
@@ -315,7 +315,7 @@ export default function Chatbot({ cartItems, ingredients, menuItems, onKeyboardO
         <button
           onClick={() => void sendMessage()}
           disabled={isSending}
-          className="bg-black text-white px-3 py-2 rounded disabled:opacity-60"
+          className="bg-foreground text-[rgb(var(--background))] px-3 py-2 rounded disabled:opacity-60"
         >
           {isSending ? "..." : "Send"}
         </button>
