@@ -94,6 +94,59 @@ function userSpecifiedSize(message: string) {
   return /\b(size|small|medium|large)\b/i.test(message);
 }
 
+function userRequestedEdit(message: string) {
+  return /\b(change|set|make|update|adjust|edit|switch|turn)\b/i.test(message);
+}
+
+function userTargetedAllCartItems(message: string) {
+  return /\b(all|everything|entire cart|whole cart|every item|every drink|all drinks|all items)\b/i.test(message);
+}
+
+function normalizeSweetnessLevel(value: number) {
+  return validSweetnessLevels.reduce((closest, current) =>
+    Math.abs(current - value) < Math.abs(closest - value) ? current : closest
+  );
+}
+
+function parseRequestedSweetness(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (!userSpecifiedSweetness(normalizedMessage)) {
+    return null;
+  }
+
+  if (/\bhalf\b/.test(normalizedMessage)) {
+    return 50;
+  }
+
+  if (/\b(no|zero)\s*(sweet|sweetness|sugar)\b/.test(normalizedMessage) || /\bsugar[- ]?free\b/.test(normalizedMessage)) {
+    return 0;
+  }
+
+  const percentBeforeSweetness = normalizedMessage.match(/(\d{1,3})\s*%\s*(sweet|sweetness|sugar)\b/);
+
+  if (percentBeforeSweetness) {
+    const value = Number.parseInt(percentBeforeSweetness[1], 10);
+    return Number.isFinite(value) ? normalizeSweetnessLevel(value) : null;
+  }
+
+  const sweetnessBeforePercent = normalizedMessage.match(/\b(sweet|sweetness|sugar)\s*(to|at)?\s*(\d{1,3})\s*%?/);
+
+  if (sweetnessBeforePercent) {
+    const value = Number.parseInt(sweetnessBeforePercent[3], 10);
+    return Number.isFinite(value) ? normalizeSweetnessLevel(value) : null;
+  }
+
+  const anyPercent = normalizedMessage.match(/\b(\d{1,3})\s*%/);
+
+  if (anyPercent) {
+    const value = Number.parseInt(anyPercent[1], 10);
+    return Number.isFinite(value) ? normalizeSweetnessLevel(value) : null;
+  }
+
+  return null;
+}
+
 function normalizeAddAction(action: AddToCartAction, message: string): AddToCartAction {
   const sweetnessSource = userSpecifiedSweetness(message) ? action.sweetness : 100;
   const normalizedSweetness = validSweetnessLevels.includes(sweetnessSource as (typeof validSweetnessLevels)[number])
@@ -225,6 +278,34 @@ export async function POST(req: NextRequest) {
 
     if (!message) {
       return NextResponse.json({ reply: "Please type a Brew 34 question first." }, { status: 400 });
+    }
+
+    const requestedSweetness = parseRequestedSweetness(message);
+    const bulkSweetnessEditRequested =
+      requestedSweetness !== null &&
+      userRequestedEdit(message) &&
+      userTargetedAllCartItems(message);
+
+    if (bulkSweetnessEditRequested) {
+      if (cartItems.length === 0) {
+        return NextResponse.json({
+          reply: "Your cart is empty right now, so there are no drinks to update.",
+          action: { type: "none" },
+          actions: []
+        });
+      }
+
+      const bulkEditActions: EditCartItemAction[] = cartItems.map((item, index) => ({
+        type: "edit_cart_item",
+        cartIndex: item.cartIndex ?? index + 1,
+        sweetness: requestedSweetness
+      }));
+
+      return NextResponse.json({
+        reply: `Done - I changed all cart items to ${requestedSweetness}% sweetness.`,
+        action: bulkEditActions[0],
+        actions: bulkEditActions
+      });
     }
 
     if (!process.env.OPENAI_API_KEY) {
