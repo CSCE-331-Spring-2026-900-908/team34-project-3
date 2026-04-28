@@ -4,7 +4,7 @@
 // We keep most imports. We just need to update the types we use.
 import { X, Minus, Plus, ShoppingCart, CupSoda, LogOut, Receipt, Search, MessageCircle, Gift, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +29,20 @@ type KioskClientProps = {
     menuItems: MenuItemRecord[];
     ingredients: IngredientRecord[];
 };
+
+type NarrationSection = "intro" | "menu" | "cart" | "modal" | "rewards-checkout";
+
+type GuidedNarrationStep =
+    | { section: NarrationSection; text: string; action: "none"; focusId?: string }
+    | { section: NarrationSection; text: string; action: "category"; category: string; focusId?: string }
+    | { section: NarrationSection; text: string; action: "drink"; itemId: number; focusId?: string }
+    | { section: NarrationSection; text: string; action: "cart-item"; index: number; focusId?: string }
+    | { section: NarrationSection; text: string; action: "quantity"; delta: -1 | 1; focusId?: string }
+    | { section: NarrationSection; text: string; action: "size"; size: DrinkSize; focusId?: string }
+    | { section: NarrationSection; text: string; action: "sweetness"; sweetness: (typeof sweetnessOptions)[number]; focusId?: string }
+    | { section: NarrationSection; text: string; action: "ice"; ice: 0 | 1 | 2 | 3; focusId?: string }
+    | { section: NarrationSection; text: string; action: "ingredient"; ingredientId: number; delta: -1 | 1; focusId?: string }
+    | { section: NarrationSection; text: string; action: "checkout" | "signin" | "rewards" | "add-to-cart" | "close-modal" | "guest-checkout" | "close-rewards-checkout"; focusId?: string };
 
 // The rest of the types (ModalTranslations, SelectedIngredientState) and helper functions
 // (lineTotal) are IDENTICAL to pos-client.tsx [4] and can be copied directly.
@@ -173,6 +187,13 @@ function isCaffeinatedDrink(name: string) {
     );
 }
 
+function getDrinkSpeechLabel(item: MenuItemRecord) {
+    const category = getDrinkCategory(item.name);
+    const caffeineLabel = isCaffeinatedDrink(item.name) ? "Caffeinated." : "Not marked caffeinated.";
+
+    return `${item.name}. ${formatCurrency(item.cost)}. Category: ${category}. ${caffeineLabel}`;
+}
+
 // --- REPURPOSED FOR KIOSK (Component Definition) ---
 // We rename the component and update its props.
 export function KioskClient({ customer, menuItems, ingredients }: KioskClientProps) {
@@ -206,6 +227,9 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const [translatorLanguage, setTranslatorLanguage] = useState("en");
     const [modalTranslations, setModalTranslations] = useState<ModalTranslations | null>(null);
     const modalContentRef = useRef<HTMLDivElement | null>(null);
+    const narrationUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+    const guidedNarrationIndexRef = useRef(0);
+    const pendingCategoryNarrationRef = useRef<string | null>(null);
     const paidIngredients = useMemo(() => ingredients.filter((ingredient) => ingredient.addCost > 0), [ingredients]);
 
     useEffect(() => {
@@ -269,8 +293,21 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                     }
                 })
             );
+            guidedNarrationIndexRef.current = 0;
+            window.dispatchEvent(new Event("kiosk:narration-next"));
         }, 50);
     }, [selectedItem]);
+
+    useEffect(() => {
+        if (!rewardsCheckoutPromptOpen) {
+            return;
+        }
+
+        window.setTimeout(() => {
+            guidedNarrationIndexRef.current = 0;
+            window.dispatchEvent(new Event("kiosk:narration-next"));
+        }, 50);
+    }, [rewardsCheckoutPromptOpen]);
 
     useEffect(() => {
         let cancelled = false;
@@ -474,6 +511,497 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     }, [activeCategory, ingredientNameMap, menuItems, searchQuery]);
     const keyboardOpen = searchKeyboardOpen || chatKeyboardOpen;
 
+    const guidedNarrationSteps = useMemo<GuidedNarrationStep[]>(() => {
+        if (rewardsCheckoutPromptOpen) {
+            return [
+                {
+                    section: "rewards-checkout",
+                    action: "none",
+                    focusId: "kiosk-rewards-checkout-modal",
+                    text: "Rewards checkout. Earn points on this order? Press Next to choose sign in with Google or checkout as guest."
+                },
+                {
+                    section: "rewards-checkout",
+                    action: "signin",
+                    focusId: "kiosk-rewards-signin",
+                    text: "Sign in with Google to earn rewards points for this purchase. Press Yes to sign in with Google."
+                },
+                {
+                    section: "rewards-checkout",
+                    action: "guest-checkout",
+                    focusId: "kiosk-guest-checkout",
+                    text: "Checkout as guest without earning points. Press Yes to checkout as guest."
+                },
+                {
+                    section: "rewards-checkout",
+                    action: "close-rewards-checkout",
+                    focusId: "kiosk-close-rewards-checkout",
+                    text: "Close rewards checkout and return to the order. Press Yes to close this prompt."
+                }
+            ];
+        }
+
+        if (selectedItem) {
+            const itemTotal = formatCurrency(lineTotal(selectedItem, quantity, selectedIngredients, paidIngredients, size));
+
+            return [
+                {
+                    section: "modal",
+                    action: "none",
+                    focusId: "kiosk-customize-modal",
+                    text: `Customize ${selectedItem.name}. Base price ${formatCurrency(selectedItem.cost)}. Current item total ${itemTotal}. Press Next to move through options, or Yes on an option to choose it.`
+                },
+                {
+                    section: "modal",
+                    action: "quantity",
+                    delta: -1,
+                    focusId: "kiosk-quantity-decrease",
+                    text: `Quantity is ${quantity}. Press Yes to decrease quantity.`
+                },
+                {
+                    section: "modal",
+                    action: "quantity",
+                    delta: 1,
+                    focusId: "kiosk-quantity-increase",
+                    text: `Quantity is ${quantity}. Press Yes to increase quantity.`
+                },
+                ...sizeOptions.map((option) => ({
+                    section: "modal" as const,
+                    action: "size" as const,
+                    size: option.value,
+                    focusId: `kiosk-size-${option.value}`,
+                    text: `Size ${option.label}. ${size === option.value ? "Currently selected." : ""} Press Yes to choose ${option.label}.`
+                })),
+                ...sweetnessOptions.map((option) => ({
+                    section: "modal" as const,
+                    action: "sweetness" as const,
+                    sweetness: option,
+                    focusId: `kiosk-sweetness-${option}`,
+                    text: `Sweetness ${option} percent. ${sweetness === option ? "Currently selected." : ""} Press Yes to choose ${option} percent sweetness.`
+                })),
+                ...iceOptions.map((option) => ({
+                    section: "modal" as const,
+                    action: "ice" as const,
+                    ice: option.value,
+                    focusId: `kiosk-ice-${option.value}`,
+                    text: `Ice ${option.label}. ${ice === option.value ? "Currently selected." : ""} Press Yes to choose ${option.label} ice.`
+                })),
+                ...paidIngredients.flatMap((ingredient) => {
+                    const selectedQuantity = selectedIngredients[ingredient.id] ?? 0;
+
+                    return [
+                        {
+                            section: "modal" as const,
+                            action: "ingredient" as const,
+                            ingredientId: ingredient.id,
+                            delta: -1 as const,
+                            focusId: `kiosk-ingredient-${ingredient.id}-remove`,
+                            text: `${ingredient.name}. ${formatCurrency(ingredient.addCost)} each. Current quantity ${selectedQuantity}. Press Yes to remove one.`
+                        },
+                        {
+                            section: "modal" as const,
+                            action: "ingredient" as const,
+                            ingredientId: ingredient.id,
+                            delta: 1 as const,
+                            focusId: `kiosk-ingredient-${ingredient.id}-add`,
+                            text: `${ingredient.name}. ${formatCurrency(ingredient.addCost)} each. Current quantity ${selectedQuantity}. Press Yes to add one.`
+                        }
+                    ];
+                }),
+                {
+                    section: "modal",
+                    action: "add-to-cart",
+                    focusId: "kiosk-add-to-cart",
+                    text: `${editingItemIndex !== null ? "Save changes" : "Add to cart"}. Item total ${itemTotal}. Press Yes to ${editingItemIndex !== null ? "save changes" : "add this drink to the cart"}.`
+                },
+                {
+                    section: "modal",
+                    action: "close-modal",
+                    focusId: "kiosk-cancel-customize",
+                    text: "Cancel customization. Press Yes to close this drink without adding it."
+                }
+            ];
+        }
+
+        const cartTotalAfterDiscount = formatCurrency(Math.max(0, cartTotal - discount));
+        const steps: GuidedNarrationStep[] = [
+            {
+                section: "intro",
+                action: "none",
+                focusId: MAIN_CONTENT_ID,
+                text: customer
+                    ? `Welcome to Brew 34, ${customer.fullName}. You have ${rewardsPoints} rewards points. Press Next to move one option at a time, Skip to jump sections, or Yes to choose the current option.`
+                    : "Welcome to Brew 34. You are ordering as a guest. Press Next to move one option at a time, Skip to jump sections, or Yes to choose the current option."
+            },
+            {
+                section: "menu",
+                action: "none",
+                focusId: "customer-menu-section",
+                text: `Menu section. Active category is ${activeCategory}. ${searchQuery.trim() ? `Search filter is ${searchQuery.trim()}.` : "No search filter is active."}`
+            },
+            ...categories.map((category) => ({
+                section: "menu" as const,
+                action: "category" as const,
+                category,
+                focusId: "customer-menu-section",
+                text: `Category: ${category}. Press Yes to hear drinks in ${category}.`
+            })),
+            ...(filteredMenuItems.length > 0
+                ? filteredMenuItems.map((item, index) => ({
+                    section: "menu" as const,
+                    action: "drink" as const,
+                    itemId: item.id,
+                    focusId: `kiosk-drink-${item.id}`,
+                    text: `Drink ${index + 1} of ${filteredMenuItems.length}. ${getDrinkSpeechLabel(item)} Press Yes to customize this drink.`
+                }))
+                : [
+                    {
+                        section: "menu" as const,
+                        action: "none" as const,
+                        focusId: "customer-menu-section",
+                        text: "No drinks match the current search and category filters. Press Skip to move to the cart."
+                    }
+                ]),
+            {
+                section: "cart",
+                action: "none",
+                focusId: "customer-cart-section",
+                text: items.length === 0
+                    ? "Cart section. Your cart is empty."
+                    : `Cart section. Your cart has ${items.length} ${items.length === 1 ? "item" : "items"} and the current total is ${cartTotalAfterDiscount}.`
+            },
+            ...(items.length > 0
+                ? items.map((item, index) => ({
+                    section: "cart" as const,
+                    action: "cart-item" as const,
+                    index,
+                    focusId: `kiosk-cart-item-${index}`,
+                    text: `Cart item ${index + 1} of ${items.length}. ${item.quantity} ${sizeLabel(item.size)} ${item.itemName}. ${formatCurrency(item.cost)}. Sweetness ${item.sweetness} percent. Press Yes to edit this item.`
+                }))
+                : []),
+            {
+                section: "cart",
+                action: items.length > 0 ? "checkout" : "none",
+                focusId: "customer-checkout-button",
+                text: items.length > 0
+                    ? `Complete order. Total ${cartTotalAfterDiscount}. Press Yes to continue checkout.`
+                    : "Checkout is unavailable until you add a drink."
+            },
+            {
+                section: "cart",
+                action: customer ? "rewards" : "signin",
+                focusId: customer ? "customer-rewards-tab" : "customer-signin-link",
+                text: customer
+                    ? `Rewards. You have ${rewardsPoints} points. Press Yes to open rewards.`
+                    : "Sign in to earn rewards. Press Yes to go to customer sign in."
+            }
+        ];
+
+        return steps;
+    }, [
+        activeCategory,
+        cartTotal,
+        categories,
+        customer,
+        discount,
+        editingItemIndex,
+        filteredMenuItems,
+        ice,
+        items,
+        paidIngredients,
+        quantity,
+        rewardsPoints,
+        rewardsCheckoutPromptOpen,
+        searchQuery,
+        selectedIngredients,
+        selectedItem,
+        size,
+        sweetness
+    ]);
+
+    const updateNarrationStatus = useCallback((speaking: boolean) => {
+        window.dispatchEvent(new CustomEvent("kiosk:narration-status", { detail: { speaking } }));
+    }, []);
+
+    const stopNarration = useCallback(() => {
+        if ("speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+        }
+
+        narrationUtteranceRef.current = null;
+        updateNarrationStatus(false);
+    }, [updateNarrationStatus]);
+
+    const speakGuidedStep = useCallback((index: number) => {
+        if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+            toast.error("This browser does not support built-in speech narration.");
+            return;
+        }
+
+        const boundedIndex = Math.min(Math.max(index, 0), Math.max(0, guidedNarrationSteps.length - 1));
+        const step = guidedNarrationSteps[boundedIndex];
+
+        if (!step) {
+            return;
+        }
+
+        guidedNarrationIndexRef.current = boundedIndex;
+        stopNarration();
+        document.getElementById(step.focusId ?? MAIN_CONTENT_ID)?.focus();
+
+        const utterance = new SpeechSynthesisUtterance(step.text);
+        utterance.rate = 0.92;
+        utterance.pitch = 1;
+        utterance.onend = () => updateNarrationStatus(false);
+        utterance.onerror = () => updateNarrationStatus(false);
+        narrationUtteranceRef.current = utterance;
+        updateNarrationStatus(true);
+        window.speechSynthesis.speak(utterance);
+    }, [guidedNarrationSteps, stopNarration, updateNarrationStatus]);
+
+    const findFirstStepInSection = useCallback((section: NarrationSection) => {
+        const index = guidedNarrationSteps.findIndex((step) => step.section === section);
+        return index === -1 ? 0 : index;
+    }, [guidedNarrationSteps]);
+
+    const findFirstDrinkStep = useCallback(() => {
+        return guidedNarrationSteps.findIndex((step) => step.action === "drink");
+    }, [guidedNarrationSteps]);
+
+    const moveToNextGuidedStep = useCallback(() => {
+        const nextIndex = (guidedNarrationIndexRef.current + 1) % Math.max(1, guidedNarrationSteps.length);
+        speakGuidedStep(nextIndex);
+    }, [guidedNarrationSteps.length, speakGuidedStep]);
+
+    const skipGuidedSection = useCallback(() => {
+        const currentStep = guidedNarrationSteps[guidedNarrationIndexRef.current];
+        const currentSection = currentStep?.section ?? "intro";
+
+        if (currentSection === "modal") {
+            let nextIndex = -1;
+
+            if (!currentStep || currentStep.action === "none" || currentStep.action === "quantity") {
+                nextIndex = guidedNarrationSteps.findIndex((step) => step.action === "size");
+            } else if (currentStep.action === "size") {
+                nextIndex = guidedNarrationSteps.findIndex((step) => step.action === "sweetness");
+            } else if (currentStep.action === "sweetness") {
+                nextIndex = guidedNarrationSteps.findIndex((step) => step.action === "ice");
+            } else if (currentStep.action === "ice") {
+                nextIndex = guidedNarrationSteps.findIndex((step) => step.action === "ingredient");
+            } else if (currentStep.action === "ingredient") {
+                nextIndex = guidedNarrationSteps.findIndex((step) => step.action === "add-to-cart");
+            } else if (currentStep.action === "add-to-cart") {
+                nextIndex = guidedNarrationSteps.findIndex((step) => step.action === "close-modal");
+            }
+
+            speakGuidedStep(nextIndex === -1 ? 0 : nextIndex);
+            return;
+        }
+
+        if (currentSection === "rewards-checkout") {
+            const nextIndex = Math.min(guidedNarrationIndexRef.current + 1, guidedNarrationSteps.length - 1);
+            speakGuidedStep(nextIndex);
+            return;
+        }
+
+        if (currentSection === "intro") {
+            speakGuidedStep(findFirstStepInSection("menu"));
+            return;
+        }
+
+        if (currentSection === "menu") {
+            speakGuidedStep(findFirstStepInSection("cart"));
+            return;
+        }
+
+        speakGuidedStep(findFirstStepInSection("menu"));
+    }, [findFirstStepInSection, guidedNarrationSteps, speakGuidedStep]);
+
+    const selectCurrentGuidedStep = useCallback(() => {
+        const step = guidedNarrationSteps[guidedNarrationIndexRef.current];
+
+        if (!step) {
+            return;
+        }
+
+        stopNarration();
+
+        if (step.action === "category") {
+            setActiveTab("menu");
+            pendingCategoryNarrationRef.current = step.category;
+            setActiveCategory(step.category);
+            toast.success(`Showing ${step.category}.`);
+
+            if (step.category === activeCategory) {
+                pendingCategoryNarrationRef.current = null;
+                const firstDrinkIndex = findFirstDrinkStep();
+                if (firstDrinkIndex !== -1) {
+                    speakGuidedStep(firstDrinkIndex);
+                }
+            }
+
+            return;
+        }
+
+        if (step.action === "none") {
+            moveToNextGuidedStep();
+            return;
+        }
+
+        if (step.action === "drink") {
+            const item = menuItems.find((candidate) => candidate.id === step.itemId);
+
+            if (item) {
+                openAddItemModal(item);
+            }
+
+            return;
+        }
+
+        if (step.action === "cart-item") {
+            openEditItemModal(step.index);
+            return;
+        }
+
+        if (step.action === "quantity") {
+            setQuantity((current) => step.delta > 0 ? Math.min(20, current + 1) : Math.max(1, current - 1));
+            setTimeout(() => speakGuidedStep(guidedNarrationIndexRef.current), 0);
+            return;
+        }
+
+        if (step.action === "size") {
+            setSize(step.size);
+            setTimeout(() => speakGuidedStep(guidedNarrationIndexRef.current), 0);
+            return;
+        }
+
+        if (step.action === "sweetness") {
+            setSweetness(step.sweetness);
+            setTimeout(() => speakGuidedStep(guidedNarrationIndexRef.current), 0);
+            return;
+        }
+
+        if (step.action === "ice") {
+            setIce(step.ice);
+            setTimeout(() => speakGuidedStep(guidedNarrationIndexRef.current), 0);
+            return;
+        }
+
+        if (step.action === "ingredient") {
+            updateIngredient(step.ingredientId, step.delta);
+            setTimeout(() => speakGuidedStep(guidedNarrationIndexRef.current), 0);
+            return;
+        }
+
+        if (step.action === "checkout") {
+            void handleCheckout();
+            return;
+        }
+
+        if (step.action === "signin") {
+            startRewardsSignIn();
+            return;
+        }
+
+        if (step.action === "guest-checkout") {
+            void submitCheckout(true);
+            return;
+        }
+
+        if (step.action === "close-rewards-checkout") {
+            setRewardsCheckoutPromptOpen(false);
+            return;
+        }
+
+        if (step.action === "rewards") {
+            setActiveTab("rewards");
+            toast.success("Opened rewards.");
+            return;
+        }
+
+        if (step.action === "add-to-cart") {
+            addSelectedItem();
+            return;
+        }
+
+        if (step.action === "close-modal") {
+            closeModal();
+        }
+    // The local action functions are intentionally read from the current render for the spoken step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeCategory, findFirstDrinkStep, guidedNarrationSteps, menuItems, moveToNextGuidedStep, speakGuidedStep, stopNarration]);
+
+    useEffect(() => {
+        if (!pendingCategoryNarrationRef.current || pendingCategoryNarrationRef.current !== activeCategory) {
+            return;
+        }
+
+        pendingCategoryNarrationRef.current = null;
+        const firstDrinkIndex = findFirstDrinkStep();
+
+        if (firstDrinkIndex !== -1) {
+            speakGuidedStep(firstDrinkIndex);
+            return;
+        }
+
+        const menuIndex = findFirstStepInSection("menu");
+        speakGuidedStep(menuIndex);
+    }, [activeCategory, findFirstDrinkStep, findFirstStepInSection, speakGuidedStep]);
+
+    useEffect(() => {
+        function handleStartNarration() {
+            speakGuidedStep(guidedNarrationIndexRef.current);
+        }
+
+        function handleStopNarration() {
+            stopNarration();
+        }
+
+        function handleNextNarration() {
+            moveToNextGuidedStep();
+        }
+
+        function handleSkipNarration() {
+            skipGuidedSection();
+        }
+
+        function handleSelectNarration() {
+            selectCurrentGuidedStep();
+        }
+
+        function handleHashChange() {
+            if (window.location.hash === "#customer-cart-section") {
+                speakGuidedStep(findFirstStepInSection("cart"));
+            } else if (window.location.hash === "#customer-menu-section") {
+                speakGuidedStep(findFirstStepInSection("menu"));
+            }
+        }
+
+        window.addEventListener("kiosk:narration-start", handleStartNarration);
+        window.addEventListener("kiosk:narration-stop", handleStopNarration);
+        window.addEventListener("kiosk:narration-next", handleNextNarration);
+        window.addEventListener("kiosk:narration-skip", handleSkipNarration);
+        window.addEventListener("kiosk:narration-select", handleSelectNarration);
+        window.addEventListener("hashchange", handleHashChange);
+
+        return () => {
+            window.removeEventListener("kiosk:narration-start", handleStartNarration);
+            window.removeEventListener("kiosk:narration-stop", handleStopNarration);
+            window.removeEventListener("kiosk:narration-next", handleNextNarration);
+            window.removeEventListener("kiosk:narration-skip", handleSkipNarration);
+            window.removeEventListener("kiosk:narration-select", handleSelectNarration);
+            window.removeEventListener("hashchange", handleHashChange);
+            stopNarration();
+        };
+    }, [
+        findFirstStepInSection,
+        moveToNextGuidedStep,
+        selectCurrentGuidedStep,
+        skipGuidedSection,
+        speakGuidedStep,
+        stopNarration
+    ]);
+
     // All the functions (closeModal, updateIngredient, addSelectedItem, handleCheckout) are
     // IDENTICAL to pos-client.tsx [4], copy them here.
 
@@ -657,8 +1185,15 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     return (
         <>
             <SkipLink />
+            <SkipLink targetId="customer-menu-section" label="Skip to menu" />
+            <SkipLink targetId="customer-cart-section" label="Skip to cart" />
             {/* --- REPURPOSED FOR KIOSK (Main Layout) --- */}
-            <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen bg-stone-100">
+            <main
+                id={MAIN_CONTENT_ID}
+                tabIndex={-1}
+                aria-label="Brew 34 customer ordering kiosk"
+                className="min-h-screen bg-stone-100"
+            >
                 <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8", keyboardOpen && "pb-[32rem]")}>
 
                     {/* --- REPURPOSED FOR KIOSK (Header) --- */}
@@ -691,8 +1226,9 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         ) : (
                             /* If no customer, show a Sign In button. */
                             <a
+                                id="customer-signin-link"
                                 href="/customer-login?next=/kiosk"
-                                className="ml-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-foreground px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black min-h-11"
+                                className="ml-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-foreground px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
                             >
                                 Sign In to Earn Rewards
                             </a>
@@ -705,8 +1241,14 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                     </div>
 
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_380px]">
-                        <Card className="shadow-sm">
+                        <Card
+                            id="customer-menu-section"
+                            tabIndex={-1}
+                            className="relative shadow-sm"
+                            aria-labelledby="customer-menu-heading"
+                        >
                             <CardHeader>
+                                <h2 id="customer-menu-heading" className="sr-only">Customer menu</h2>
                                 {customer ? (
                                     <div className="space-y-4">
                                         <div className="flex items-center gap-4">
@@ -719,6 +1261,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                             </button>
                                             <span className="text-stone-300">|</span>
                                             <button
+                                                id="customer-rewards-tab"
                                                 type="button"
                                                 onClick={() => setActiveTab("rewards")}
                                                 className={cn("flex items-center gap-2 text-xl font-semibold transition-colors", activeTab === "rewards" ? "text-stone-900" : "text-stone-400 hover:text-stone-600")}
@@ -764,6 +1307,8 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                                     variant={activeCategory === category ? "default" : "outline"}
                                                     size="sm"
                                                     onClick={() => setActiveCategory(category)}
+                                                    aria-pressed={activeCategory === category}
+                                                    aria-label={`Show ${category} drinks`}
                                                 >
                                                     {category}
                                                 </Button>
@@ -954,8 +1499,10 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         // with a large, visual, clickable card that includes our new `imageUrl`.
                                         <button
                                             key={item.id}
+                                            id={`kiosk-drink-${item.id}`}
                                             type="button"
                                             onClick={() => openAddItemModal(item)}
+                                            aria-label={`${getDrinkSpeechLabel(item)} Tap to customize this drink.`}
                                             className="group relative flex flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-left shadow-sm transition-all hover:border-blue-500 hover:shadow-lg"
                                         >
                                             {isCaffeinatedDrink(item.name) ? (
@@ -966,7 +1513,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                             {/* Placeholder Image using the new `imageUrl` field */}
                                             <img
                                                 src={item.imageUrl}
-                                                alt={item.name}
+                                                alt={`${item.name} drink`}
                                                 className="w-full h-40 object-cover bg-stone-200"
                                                 onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/menu-items/placeholder.png"; }}
                                             />
@@ -993,10 +1540,15 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         {/* The entire cart component is almost identical to PosClient [4]. */}
                         {/* It already reads from the shared `useOrderStore`, so it will work automatically. */}
                         {/* We can just copy the <Card> for the cart directly from pos-client.tsx. */}
-                        <Card className="h-fit xl:sticky xl:top-6 shadow-sm">
+                        <Card
+                            id="customer-cart-section"
+                            tabIndex={-1}
+                            className="relative h-fit shadow-sm xl:sticky xl:top-6"
+                            aria-labelledby="customer-cart-heading"
+                        >
                             { /* ... (Paste the entire Cart Card JSX from pos-client.tsx here) ... */}
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
+                                <CardTitle id="customer-cart-heading" className="flex items-center gap-2">
                                     <ShoppingCart className="h-5 w-5" />
                                     Cart
                                 </CardTitle>
@@ -1011,6 +1563,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         items.map((item, index) => (
                                             <button
                                                 key={`${item.itemId}-${index}`}
+                                                id={`kiosk-cart-item-${index}`}
                                                 type="button"
                                                 onClick={() => openEditItemModal(index)}
                                                 className="w-full rounded-xl border border-border bg-[rgb(var(--surface-alt))] p-4 text-left transition hover:bg-white"
@@ -1070,7 +1623,13 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                     </div>
                                 </div>
 
-                                <Button className="w-full gap-2" size="lg" onClick={handleCheckout} disabled={checkoutPending}>
+                                <Button
+                                    id="customer-checkout-button"
+                                    className="w-full gap-2"
+                                    size="lg"
+                                    onClick={handleCheckout}
+                                    disabled={checkoutPending}
+                                >
                                     <Receipt className="h-4 w-4" />
                                     {checkoutPending ? "Completing order..." : "Complete Order"}
                                 </Button>
@@ -1128,7 +1687,11 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
 
                 {rewardsCheckoutPromptOpen ? (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-                        <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl">
+                        <div
+                            id="kiosk-rewards-checkout-modal"
+                            tabIndex={-1}
+                            className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl"
+                        >
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex items-center gap-3">
                                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
@@ -1144,6 +1707,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                     </div>
                                 </div>
                                 <button
+                                    id="kiosk-close-rewards-checkout"
                                     type="button"
                                     onClick={() => setRewardsCheckoutPromptOpen(false)}
                                     className="rounded-lg border border-stone-200 bg-white p-2 text-stone-500 transition hover:bg-stone-50"
@@ -1160,11 +1724,18 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                             </p>
 
                             <div className="mt-6 grid gap-3">
-                                <Button className="w-full gap-2" size="lg" onClick={startRewardsSignIn} disabled={checkoutPending}>
+                                <Button
+                                    id="kiosk-rewards-signin"
+                                    className="w-full gap-2"
+                                    size="lg"
+                                    onClick={startRewardsSignIn}
+                                    disabled={checkoutPending}
+                                >
                                     <UserRound className="h-4 w-4" />
                                     Sign in with Google
                                 </Button>
                                 <Button
+                                    id="kiosk-guest-checkout"
                                     className="w-full gap-2"
                                     variant="outline"
                                     size="lg"
@@ -1185,7 +1756,9 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                 {selectedItem ? (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
                         <div
+                            id="kiosk-customize-modal"
                             ref={modalContentRef}
+                            tabIndex={-1}
                             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-[rgb(var(--surface))]"
                         >
                             <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-border bg-[rgb(var(--surface))] p-6">
@@ -1223,13 +1796,13 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         {modalTranslations?.quantity ?? "Quantity"}
                                     </h3>
                                     <div className="flex items-center gap-3">
-                                        <Button variant="outline" size="icon" onClick={() => setQuantity((current) => Math.max(1, current - 1))}>
+                                        <Button id="kiosk-quantity-decrease" variant="outline" size="icon" onClick={() => setQuantity((current) => Math.max(1, current - 1))}>
                                             <Minus className="h-4 w-4" />
                                         </Button>
                                         <div className="min-w-[5rem] rounded-lg border border-border bg-[rgb(var(--surface-alt))] px-4 py-3 text-center text-lg font-semibold">
                                             {quantity}
                                         </div>
-                                        <Button variant="outline" size="icon" onClick={() => setQuantity((current) => Math.min(20, current + 1))}>
+                                        <Button id="kiosk-quantity-increase" variant="outline" size="icon" onClick={() => setQuantity((current) => Math.min(20, current + 1))}>
                                             <Plus className="h-4 w-4" />
                                         </Button>
                                     </div>
@@ -1243,6 +1816,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         {sizeOptions.map((option) => (
                                             <button
                                                 key={option.value}
+                                                id={`kiosk-size-${option.value}`}
                                                 type="button"
                                                 onClick={() => setSize(option.value)}
                                                 className={cn(
@@ -1266,6 +1840,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         {sweetnessOptions.map((option) => (
                                             <button
                                                 key={option}
+                                                id={`kiosk-sweetness-${option}`}
                                                 type="button"
                                                 onClick={() => setSweetness(option)}
                                                 className={cn(
@@ -1289,6 +1864,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                         {iceOptions.map((option) => (
                                             <button
                                                 key={option.value}
+                                                id={`kiosk-ice-${option.value}`}
                                                 type="button"
                                                 onClick={() => setIce(option.value)}
                                                 className={cn(
@@ -1329,10 +1905,10 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                                         <div className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">{selectedQuantity}</div>
                                                     </div>
                                                     <div className="mt-4 flex gap-2">
-                                                        <Button variant="outline" size="sm" onClick={() => updateIngredient(ingredient.id, -1)} className="flex-1">
+                                                        <Button id={`kiosk-ingredient-${ingredient.id}-remove`} variant="outline" size="sm" onClick={() => updateIngredient(ingredient.id, -1)} className="flex-1">
                                                             {modalTranslations?.remove ?? "Remove"}
                                                         </Button>
-                                                        <Button size="sm" onClick={() => updateIngredient(ingredient.id, 1)} className="flex-1">
+                                                        <Button id={`kiosk-ingredient-${ingredient.id}-add`} size="sm" onClick={() => updateIngredient(ingredient.id, 1)} className="flex-1">
                                                             {modalTranslations?.add ?? "Add"}
                                                         </Button>
                                                     </div>
@@ -1352,10 +1928,10 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                 </div>
 
                                 <div className="flex flex-wrap justify-end gap-3">
-                                    <Button variant="outline" onClick={closeModal}>
+                                    <Button id="kiosk-cancel-customize" variant="outline" onClick={closeModal}>
                                         {modalTranslations?.cancel ?? "Cancel"}
                                     </Button>
-                                    <Button onClick={addSelectedItem}>
+                                    <Button id="kiosk-add-to-cart" onClick={addSelectedItem}>
                                         {editingItemIndex !== null ? "Save Changes" : modalTranslations?.addToCart ?? "Add to Cart"}
                                     </Button>
                                 </div>

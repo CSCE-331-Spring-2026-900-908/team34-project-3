@@ -2,7 +2,7 @@
 
 import type { WheelEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Accessibility, Contrast, Languages, Loader2, Minus, Plus, Type } from "lucide-react";
+import { Accessibility, Contrast, Languages, Loader2, Minus, Plus, Type, Volume2, VolumeX } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 
@@ -13,7 +13,7 @@ const FONT_LEVELS = [100, 112.5, 125, 150] as const;
 const HIGH_CONTRAST_KEY = "kiosk-high-contrast";
 const FONT_LEVEL_KEY = "kiosk-font-level";
 
-type SettingsTab = "translate" | "contrast" | "text";
+type SettingsTab = "translate" | "contrast" | "text" | "speech";
 
 type LanguageOption = {
   code: string;
@@ -110,6 +110,7 @@ export function PageTranslator() {
   const [highContrast, setHighContrast] = useState(false);
   const [fontLevelIndex, setFontLevelIndex] = useState(0);
   const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [narrating, setNarrating] = useState(false);
 
   useEffect(() => {
     const storedContrast = localStorage.getItem(HIGH_CONTRAST_KEY) === "true";
@@ -119,6 +120,19 @@ export function PageTranslator() {
       setFontLevelIndex(storedLevel);
     }
     setSettingsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    function handleNarrationStatus(event: Event) {
+      const detail = (event as CustomEvent<{ speaking?: boolean }>).detail;
+      setNarrating(detail?.speaking === true);
+    }
+
+    window.addEventListener("kiosk:narration-status", handleNarrationStatus);
+
+    return () => {
+      window.removeEventListener("kiosk:narration-status", handleNarrationStatus);
+    };
   }, []);
 
   useEffect(() => {
@@ -638,11 +652,73 @@ export function PageTranslator() {
     );
   }
 
+  function renderSpeechTab() {
+    return (
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Spoken guidance</p>
+          <p className="text-xs text-stone-500">
+            Narrate the current customer kiosk screen, including categories, visible drinks, and the cart.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant={narrating ? "outline" : "default"}
+            className="min-h-12 gap-2"
+            onClick={() => {
+              window.dispatchEvent(new Event(narrating ? "kiosk:narration-stop" : "kiosk:narration-start"));
+            }}
+            aria-pressed={narrating}
+          >
+            {narrating ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            {narrating ? "Stop" : "Start"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12"
+            onClick={() => {
+              window.dispatchEvent(new Event("kiosk:narration-next"));
+            }}
+          >
+            Next
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12"
+            onClick={() => {
+              window.dispatchEvent(new Event("kiosk:narration-skip"));
+            }}
+          >
+            Skip
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12"
+            onClick={() => {
+              window.dispatchEvent(new Event("kiosk:narration-select"));
+            }}
+          >
+            Yes
+          </Button>
+        </div>
+
+        <p className="text-xs text-stone-500">
+          Start reads one option. Next moves forward. Skip jumps from intro to menu, then menu to cart. Yes selects the current option.
+        </p>
+      </div>
+    );
+  }
+
   const triggerLabel = onKiosk ? "Accessibility" : "Translate";
   const TriggerIcon = onKiosk ? Accessibility : Languages;
 
   return (
-    <div data-no-translate="true" className="pointer-events-none fixed right-4 top-4 z-50">
+    <div data-no-translate="true" className="pointer-events-none fixed right-4 top-4 z-[80]">
       {open ? (
         <button
           type="button"
@@ -669,7 +745,7 @@ export function PageTranslator() {
         {open ? (
           <div className="w-[20rem] rounded-[1.5rem] border border-border bg-white p-4 shadow-xl">
             {onKiosk ? (
-              <div className="mb-3 grid grid-cols-3 gap-1 rounded-2xl border border-stone-200 bg-stone-100 p-1">
+              <div className="mb-3 grid grid-cols-2 gap-1 rounded-2xl border border-stone-200 bg-stone-100 p-1">
                 <button
                   type="button"
                   onClick={() => setActiveTab("translate")}
@@ -706,12 +782,25 @@ export function PageTranslator() {
                   <Type className="h-3.5 w-3.5" />
                   Text Size
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("speech")}
+                  className={cn(
+                    "flex items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-xs font-semibold transition",
+                    activeTab === "speech" ? "bg-white text-foreground shadow-sm" : "text-stone-500 hover:text-foreground"
+                  )}
+                  aria-pressed={activeTab === "speech"}
+                >
+                  <Volume2 className="h-3.5 w-3.5" />
+                  Speech
+                </button>
               </div>
             ) : null}
 
             {(!onKiosk || activeTab === "translate") && renderTranslateTab()}
             {onKiosk && activeTab === "contrast" && renderContrastTab()}
             {onKiosk && activeTab === "text" && renderFontSizeTab()}
+            {onKiosk && activeTab === "speech" && renderSpeechTab()}
           </div>
         ) : null}
       </div>
