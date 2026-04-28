@@ -78,7 +78,7 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       {/* Left: Previous orders */}
-      <section id="restock-orders" className="relative space-y-4">
+      <section id="restock-orders" className="space-y-4">
         <SectionSkipLink targetId="ingredient-stock" label="Skip to ingredient stock" />
           <ManagerPaneHeader
             title="Previous Orders"
@@ -151,7 +151,7 @@ export function InventoryClient({ orders, criticalIngredients, allIngredients }:
       </section>
 
       {/* Right: All ingredients sorted by criticality */}
-      <section id="ingredient-stock" className="relative space-y-4">
+      <section id="ingredient-stock" className="space-y-4">
         <SectionSkipLink targetId="restock-orders" label="Skip to restock orders" />
           <ManagerPaneHeader title="Ingredient Stock Levels" />
 

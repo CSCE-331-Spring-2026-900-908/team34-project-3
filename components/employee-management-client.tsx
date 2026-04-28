@@ -167,7 +167,7 @@ export function EmployeeManagementClient({ employees }: Props) {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       {/* Left: Employee list */}
-      <section id="employee-list" className="relative space-y-4">
+      <section id="employee-list" className="space-y-4">
         <SectionSkipLink targetId="employee-form" label="Skip to employee form" />
           <ManagerPaneHeader
             title="Employees"
@@ -232,7 +232,7 @@ export function EmployeeManagementClient({ employees }: Props) {
       </section>
 
       {/* Right: Employee form */}
-      <section id="employee-form" className="relative">
+      <section id="employee-form">
           <Card>
             <CardHeader>
               <CardTitle>

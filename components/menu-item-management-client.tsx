@@ -204,7 +204,7 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       {/* Left: Menu item list */}
-      <section id="menu-item-list" className="relative space-y-4">
+      <section id="menu-item-list" className="space-y-4">
         <SectionSkipLink targetId="menu-item-form" label="Skip to item form" />
           <ManagerPaneHeader
             title="Menu Items"
@@ -256,7 +256,7 @@ export function MenuItemManagementClient({ menuItems, ingredients }: Props) {
       </section>
 
       {/* Right: Menu item form */}
-      <section id="menu-item-form" className="relative">
+      <section id="menu-item-form">
           <Card>
             <CardHeader>
               <CardTitle>
