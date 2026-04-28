@@ -669,7 +669,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                         </div>
                         <div className="min-w-0">
                             <p className="text-sm font-bold uppercase tracking-widest text-stone-500">Welcome</p>
-                            <h1 className="text-2xl font-semibold tracking-tight">{customer ? customer.fullName : ""}</h1>
+                            <h1 className="text-2xl font-semibold tracking-tight">{customer ? customer.fullName : "Guest"}</h1>
                             <p className="text-sm text-stone-500">Ready to order? Select an item below.</p>
                         </div>
                         <div className="shrink-0">
@@ -690,9 +690,12 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                             </>
                         ) : (
                             /* If no customer, show a Sign In button. */
-                            <Button variant="default" className="ml-auto gap-2">
-                                <a href="/customer-login?next=/kiosk">Sign In to Earn Rewards</a>
-                            </Button>
+                            <a
+                                href="/customer-login?next=/kiosk"
+                                className="ml-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-foreground px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black min-h-11"
+                            >
+                                Sign In to Earn Rewards
+                            </a>
                         )}
 
                         {/* <Button variant="outline" onClick={backToPortal} className="ml-auto gap-2">
@@ -969,7 +972,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                                             />
                                             <div className="p-4 flex-1 flex flex-col">
                                                 <div className="flex-1">
-                                                    <h3 className="text-lg font-semibold leading-tight group-hover:text-blue-600">{item.name}</h3>
+                                                    <h2 className="text-lg font-semibold leading-tight group-hover:text-blue-600">{item.name}</h2>
                                                 </div>
                                                 <div className="mt-2 text-xl font-bold text-stone-800">{formatCurrency(item.cost)}</div>
                                             </div>
