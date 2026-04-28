@@ -230,6 +230,8 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
     const narrationUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
     const guidedNarrationIndexRef = useRef(0);
     const pendingCategoryNarrationRef = useRef<string | null>(null);
+    const pendingModalNarrationRef = useRef(false);
+    const pendingRewardsCheckoutNarrationRef = useRef(false);
     const paidIngredients = useMemo(() => ingredients.filter((ingredient) => ingredient.addCost > 0), [ingredients]);
 
     useEffect(() => {
@@ -293,8 +295,11 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
                     }
                 })
             );
-            guidedNarrationIndexRef.current = 0;
-            window.dispatchEvent(new Event("kiosk:narration-next"));
+            if (pendingModalNarrationRef.current) {
+                pendingModalNarrationRef.current = false;
+                guidedNarrationIndexRef.current = 0;
+                window.dispatchEvent(new Event("kiosk:narration-start"));
+            }
         }, 50);
     }, [selectedItem]);
 
@@ -304,8 +309,11 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         }
 
         window.setTimeout(() => {
-            guidedNarrationIndexRef.current = 0;
-            window.dispatchEvent(new Event("kiosk:narration-next"));
+            if (pendingRewardsCheckoutNarrationRef.current) {
+                pendingRewardsCheckoutNarrationRef.current = false;
+                guidedNarrationIndexRef.current = 0;
+                window.dispatchEvent(new Event("kiosk:narration-start"));
+            }
         }, 50);
     }, [rewardsCheckoutPromptOpen]);
 
@@ -852,6 +860,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
             const item = menuItems.find((candidate) => candidate.id === step.itemId);
 
             if (item) {
+                pendingModalNarrationRef.current = true;
                 openAddItemModal(item);
             }
 
@@ -859,6 +868,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         }
 
         if (step.action === "cart-item") {
+            pendingModalNarrationRef.current = true;
             openEditItemModal(step.index);
             return;
         }
@@ -894,6 +904,7 @@ export function KioskClient({ customer, menuItems, ingredients }: KioskClientPro
         }
 
         if (step.action === "checkout") {
+            pendingRewardsCheckoutNarrationRef.current = true;
             void handleCheckout();
             return;
         }

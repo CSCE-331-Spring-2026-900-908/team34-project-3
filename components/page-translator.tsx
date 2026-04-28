@@ -136,6 +136,28 @@ export function PageTranslator() {
   }, []);
 
   useEffect(() => {
+    if (!onKiosk) {
+      return;
+    }
+
+    function handleOutsidePointerDown(event: PointerEvent) {
+      const target = event.target;
+
+      if (target instanceof Element && target.closest("[data-accessibility-controls='true']")) {
+        return;
+      }
+
+      window.dispatchEvent(new Event("kiosk:narration-stop"));
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointerDown, true);
+    };
+  }, [onKiosk]);
+
+  useEffect(() => {
     if (!settingsHydrated) {
       return;
     }
@@ -725,13 +747,14 @@ export function PageTranslator() {
           aria-label="Close settings"
           className="pointer-events-auto fixed inset-0 cursor-default bg-transparent"
           onClick={() => {
+            window.dispatchEvent(new Event("kiosk:narration-stop"));
             setOpen(false);
             setShowSuggestions(false);
           }}
         />
       ) : null}
 
-      <div className="pointer-events-auto relative z-10 flex flex-col items-end gap-3">
+      <div data-accessibility-controls="true" className="pointer-events-auto relative z-10 flex flex-col items-end gap-3">
         <Button
           type="button"
           variant="outline"
