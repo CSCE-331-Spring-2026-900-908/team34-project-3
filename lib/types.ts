@@ -57,6 +57,7 @@ export type OrderItemInput = {
   quantity: number;
   sweetness: number;
   ice: number;
+  isHot?: boolean;
   size: 0 | 1 | 2;
   ingredientChoices: IngredientChoice[];
   cost: number;

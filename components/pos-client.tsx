@@ -77,6 +77,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
   const [quantity, setQuantity] = useState(1);
   const [sweetness, setSweetness] = useState<(typeof sweetnessOptions)[number]>(100);
   const [ice, setIce] = useState<0 | 1 | 2 | 3>(2);
+  const [isHot, setIsHot] = useState(false);
   const [size, setSize] = useState<DrinkSize>(0);
   const [selectedIngredients, setSelectedIngredients] = useState<SelectedIngredientState>({});
   const [checkoutPending, setCheckoutPending] = useState(false);
@@ -105,6 +106,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
       setQuantity(1);
       setSweetness(100);
       setIce(2);
+      setIsHot(false);
       setSize(0);
       setSelectedIngredients({});
       setModalTranslations(null);
@@ -244,6 +246,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
         : 100
     );
     setIce([0, 1, 2, 3].includes(cartItem.ice) ? (cartItem.ice as 0 | 1 | 2 | 3) : 2);
+    setIsHot(cartItem.isHot ?? false);
     setSize([0, 1, 2].includes(cartItem.size) ? (cartItem.size as DrinkSize) : 0);
     setSelectedIngredients(
       cartItem.ingredientChoices.reduce<SelectedIngredientState>((accumulator, choice) => {
@@ -280,6 +283,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
       quantity,
       sweetness,
       ice,
+      isHot,
       size,
       ingredientChoices: ingredients
         .filter((ingredient) => (selectedIngredients[ingredient.id] ?? 0) > 0)
@@ -410,7 +414,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                           <div className="min-w-0">
                             <div className="font-semibold">{item.itemName}</div>
                             <div className="mt-1 text-sm text-stone-600">
-                              Qty {item.quantity} | {sizeOptions.find((o) => o.value === item.size)?.label ?? "Small"} | Sweet {item.sweetness}% | Ice {item.ice}
+                              Qty {item.quantity} | {sizeOptions.find((o) => o.value === item.size)?.label ?? "Small"} | Sweet {item.sweetness}%{item.isHot ? " | Hot" : ` | Ice ${item.ice}`}
                             </div>
                             <div className="mt-1 text-sm text-stone-500">
                               {item.ingredientChoices.length > 0
@@ -558,6 +562,33 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
 
                 <section className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">
+                    Temperature
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(["Iced", "Hot"] as const).map((option) => {
+                      const selected = option === "Hot" ? isHot : !isHot;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setIsHot(option === "Hot")}
+                          className={cn(
+                            "rounded-2xl border px-4 py-2.5 text-sm font-medium transition",
+                            selected
+                              ? "border-foreground bg-foreground text-white"
+                              : "border-border bg-white text-foreground hover:bg-[rgb(var(--muted))]"
+                          )}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {!isHot && (
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-500">
                     {modalTranslations?.ice ?? "Ice"}
                   </h3>
                   <div className="flex flex-wrap gap-2">
@@ -578,6 +609,7 @@ export function PosClient({ employee, menuItems, ingredients }: PosClientProps) 
                     ))}
                   </div>
                 </section>
+                )}
 
                 <section className="space-y-4">
                   <div>
